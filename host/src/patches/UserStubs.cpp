@@ -1,0 +1,94 @@
+#include "StdInc.h"
+
+#include <Windows.UI.Core.CoreWindowFactory.h>
+
+using namespace ABI::Windows::Foundation;
+using namespace ABI::Windows::UI::ViewManagement;
+
+static HWND g_coreWindow;
+
+static HWND(WINAPI* g_origCreateWindowInBandEx)(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpClassName, _In_opt_ LPCWSTR lpWindowName, _In_ DWORD dwStyle, _In_ int X, _In_ int Y, _In_ int nWidth, _In_ int nHeight, _In_opt_ HWND hWndParent, _In_opt_ HMENU hMenu, _In_opt_ HINSTANCE hInstance, _In_opt_ LPVOID lpParam, DWORD band, DWORD dwTypeFlags);
+
+HWND WINAPI CreateWindowInBandExImpl(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpClassName, _In_opt_ LPCWSTR lpWindowName, _In_ DWORD dwStyle, _In_ int X, _In_ int Y, _In_ int nWidth, _In_ int nHeight, _In_opt_ HWND hWndParent, _In_opt_ HMENU hMenu, _In_opt_ HINSTANCE hInstance, _In_opt_ LPVOID lpParam, DWORD band, DWORD dwTypeFlags)
+{
+	dwStyle |= WS_VISIBLE;
+
+	HString hStr;
+	hStr.Set(RuntimeClass_Windows_UI_ViewManagement_ApplicationView);
+
+	ComPtr<IApplicationViewStatics3> applicationView;
+	ImHost_GetActivationFactory(hStr.Get(), __uuidof(IApplicationViewStatics3), (void**)applicationView.GetAddressOf());
+
+	ApplicationViewWindowingMode windowingMode;
+	applicationView->get_PreferredLaunchWindowingMode(&windowingMode);
+
+	if (windowingMode != ApplicationViewWindowingMode_FullScreen)
+	{
+		dwStyle |= WS_OVERLAPPEDWINDOW;
+	}
+
+	hWndParent = ImHost_GetCoreWindowHandle();
+
+	dwStyle |= WS_CHILD;
+	dwStyle &= ~WS_POPUP;
+
+	HWND hWindow = CreateWindowExW(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+	//g_coreWindow = hWindow;
+
+	return hWindow;
+}
+
+LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+		case WM_CLOSE:
+			PostQuitMessage(0);
+			break;
+	}
+
+	return DefWindowProc(hWnd, msg, wParam, lParam);
+}
+
+HWND ImHost_GetCoreWindowHandle()
+{
+	if (!g_coreWindow)
+	{
+		// create the actual game window - well, the class
+		{
+			// TODO: icon resource
+			WNDCLASS windowClass = { 0 };
+			windowClass.lpfnWndProc = WindowProcedure;
+			windowClass.hInstance = GetModuleHandle(nullptr);
+			windowClass.hCursor = LoadCursor(0, IDC_ARROW);
+			windowClass.lpszClassName = L"Win32GameWindow";
+
+			RegisterClass(&windowClass);
+		}
+
+		DWORD windowStyle = WS_VISIBLE;
+		windowStyle |= WS_SYSMENU | WS_CAPTION;
+
+		// adjust the rectangle to fit a possible client area
+		RECT windowRect;
+		windowRect.left = 10;
+		windowRect.right = 1034;
+		windowRect.top = 10;
+		windowRect.bottom = 758;
+
+		AdjustWindowRect(&windowRect, windowStyle, FALSE);
+
+		// create the window
+		g_coreWindow = CreateWindowEx(0, L"Win32GameWindow", L"meow",
+										windowStyle, windowRect.left, windowRect.top, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
+										nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+	}
+
+	return g_coreWindow;
+}
+
+void InitializeUserStubs()
+{
+	MH_CreateHookApi(L"user32.dll", "CreateWindowInBandEx", CreateWindowInBandExImpl, (void**)&g_origCreateWindowInBandEx);
+	MH_EnableHook(MH_ALL_HOOKS);
+}

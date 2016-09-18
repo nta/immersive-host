@@ -1,0 +1,14 @@
+[uuid(887BCFE8-CE09-4E88-9CC2-707B3FF8C768)]
+library Immersive
+{
+	[
+		oleautomation,
+		uuid(304C7CFF-D1E4-4573-985A-E3AAB37FD556)
+	]
+	interface IActivationProxy : IUnknown
+	{
+		HRESULT GetActivationFactory([in] BSTR className, [out] IUnknown** factory);
+
+		HRESULT VerifyProxy();
+	}
+}

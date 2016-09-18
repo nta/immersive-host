@@ -1,0 +1,10 @@
+import "wtypes.idl";
+
+[
+	uuid(CA324434-E7D3-4368-8B12-14280ECF120A),
+	version(1.0)
+]
+interface elevation_rpc
+{
+	error_status_t set_token_appid([in] handle_t rpc_handle, [in] unsigned long process_id, [in, string] const wchar_t* full_name, [in, string] const wchar_t* app_id, [in, string] const wchar_t* family_name);
+}
