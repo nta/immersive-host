@@ -1,15 +1,24 @@
 #include "StdInc.h"
+
+#include <delayimp.h>
+
 #include <MinHook.h>
 
 #include <PackageIdentity.h>
 
 #include <strsafe.h>
 
+#define __pfnDliFailureHook2 MEOW
+#include <delayloadhandler.h>
+#undef __pfnDliFailureHook2
+
 static DWORD(WINAPI* g_origGetModuleFileNameW)(HMODULE hModule, LPWSTR lpFilename, DWORD nSize);
 static ULONG(WINAPI* g_origNtStatusToDosError)(NTSTATUS);
 static LONG(NTAPI* g_origWaitOnAddress)(void* address, void* wait, size_t size);
+static VOID(NTAPI* g_origWakeAddressAll)(void* address);
 static BOOL(WINAPI* g_origGetTokenInformation)(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
 static NTSTATUS(WINAPI* g_origNtQueryInformationToken)(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, PVOID TokenInformation, ULONG TokenInformationLength, PULONG ReturnLength);
+static PVOID(WINAPI* g_origResolveDelayLoadedAPI)(PVOID ParentModuleBase, PCIMAGE_DELAYLOAD_DESCRIPTOR DelayloadDescriptor, PDELAYLOAD_FAILURE_DLL_CALLBACK FailureDllHook, void* FailureSystemHook, PIMAGE_THUNK_DATA ThunkAddress, ULONG Flags);
 
 LPCWSTR WINAPI GetCommandLineW_Custom()
 {
@@ -111,6 +120,27 @@ LONG NTAPI RtlWaitOnAddress_Custom(void* address, void* wait, size_t size)
 	return g_origWaitOnAddress(address, wait, size);
 }
 
+DWORD g_activationUnlock;
+DWORD g_activationLock;
+
+VOID NTAPI RtlWakeAddressAll_Custom(PVOID address)
+{
+	if (IsModule<TWinAPIModule>(_ReturnAddress()))
+	{
+		if (g_activationUnlock == 0)
+		{
+			++g_activationUnlock;
+
+			g_origWakeAddressAll(&g_activationUnlock);
+
+			DWORD oldLock = g_activationLock;
+			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock));
+		}
+	}
+
+	return g_origWakeAddressAll(address);
+}
+
 
 BOOL WINAPI GetTokenInformation_Custom(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength)
 {
@@ -202,19 +232,52 @@ NTSTATUS WINAPI NtQueryInformationToken_Custom(HANDLE TokenHandle, TOKEN_INFORMA
 	return status;
 }
 
+extern "C"
+FARPROC WINAPI
+LocalDelayLoadHelper2(
+	PVOID				imageBase,
+	PCImgDelayDescr     pidd,
+	FARPROC *           ppfnIATEntry
+);
+
+PVOID WINAPI ResolveDelayLoadedAPI_Custom(PVOID ParentModuleBase, PCIMAGE_DELAYLOAD_DESCRIPTOR DelayloadDescriptor,
+										  PDELAYLOAD_FAILURE_DLL_CALLBACK FailureDllHook, void* FailureSystemHook, PIMAGE_THUNK_DATA ThunkAddress, ULONG Flags)
+{
+	void* retval = g_origResolveDelayLoadedAPI(ParentModuleBase, DelayloadDescriptor, FailureDllHook, FailureSystemHook, ThunkAddress, Flags);
+
+	if (!retval)
+	{
+		if (g_activationLock < 1)
+		{
+			DWORD oldLock = g_activationLock;
+			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock));
+		}
+
+		retval = LocalDelayLoadHelper2(ParentModuleBase, (PCImgDelayDescr)DelayloadDescriptor, (FARPROC*)ThunkAddress);
+	}
+
+	return retval;
+}
+
+
 void InitializeBaseStubs()
 {
 	LoadLibrary(L"sechost.dll");
 
-	MH_CreateHookApi(L"kernelbase.dll", "GetCommandLineW", GetCommandLineW_Custom, nullptr);
-	MH_CreateHookApi(L"kernelbase.dll", "GetLastError", GetLastError_Custom, nullptr);
-	MH_CreateHookApi(L"ntdll.dll", "RtlNtStatusToDosError", RtlNtStatusToDosError_Custom, (void**)&g_origNtStatusToDosError);
+	auto peb = NtCurrentPeb();
+	wcscpy(peb->ProcessParameters->CommandLine.Buffer, L"-ServerName:App.AppX92m5m1wwhhzwrbzhvdt7whj6b4qqpaqa.mca");// L"-ServerName:OpusReleaseFinal.AppXhz3m1thxb88yczd2ax0k426vzefwnnmc.mca");
+	auto a = GetCommandLineW();
+
+	//MH_CreateHookApi(L"kernelbase.dll", "GetCommandLineW", GetCommandLineW_Custom, nullptr);
+	//MH_CreateHookApi(L"kernelbase.dll", "GetLastError", GetLastError_Custom, nullptr);
+	//MH_CreateHookApi(L"ntdll.dll", "RtlNtStatusToDosError", RtlNtStatusToDosError_Custom, (void**)&g_origNtStatusToDosError);
 	MH_CreateHookApi(L"kernelbase.dll", "OpenState", OpenState_Custom, nullptr);
 	MH_CreateHookApi(L"kernelbase.dll", "CloseState", CloseState_Custom, nullptr);
 	MH_CreateHookApi(L"kernelbase.dll", "GetStateFolder", GetStateFolder_Custom, nullptr);
 	MH_CreateHookApi(L"sechost.dll", "CapabilityCheck", CapabilityCheck_Custom, nullptr);
 	MH_CreateHookApi(L"kernelbase.dll", "GetTokenInformation", GetTokenInformation_Custom, (void**)&g_origGetTokenInformation);
 	MH_CreateHookApi(L"ntdll.dll", "RtlWaitOnAddress", RtlWaitOnAddress_Custom, (void**)&g_origWaitOnAddress);
+	MH_CreateHookApi(L"ntdll.dll", "RtlWakeAddressAll", RtlWakeAddressAll_Custom, (void**)&g_origWakeAddressAll);
 	MH_EnableHook(MH_ALL_HOOKS);
 }
 
@@ -223,12 +286,13 @@ void PrepareActivation();
 void PostInitializeBaseStubs()
 {
 	MH_CreateHookApi(L"ntdll.dll", "NtQueryInformationToken", NtQueryInformationToken_Custom, (void**)&g_origNtQueryInformationToken);
+	MH_CreateHookApi(L"ntdll.dll", "LdrResolveDelayLoadedAPI", ResolveDelayLoadedAPI_Custom, (void**)&g_origResolveDelayLoadedAPI);
 	MH_EnableHook(MH_ALL_HOOKS);
 
 	RoInitialize(RO_INIT_MULTITHREADED);
 
 	PrepareActivation();
 
-	MH_CreateHookApi(L"kernelbase.dll", "GetModuleFileNameW", GetModuleFileNameW_Custom, (void**)&g_origGetModuleFileNameW);
+	//MH_CreateHookApi(L"kernelbase.dll", "GetModuleFileNameW", GetModuleFileNameW_Custom, (void**)&g_origGetModuleFileNameW);
 	MH_EnableHook(MH_ALL_HOOKS);
 }

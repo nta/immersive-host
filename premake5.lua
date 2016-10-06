@@ -31,7 +31,7 @@ project 'immersivehost'
     targetname 'ImmersiveHost'
     language 'C++'
     kind 'ConsoleApp'
-    windowstarget '10.0.10586.0'
+    windowstarget '10.0.14393.0'
 
     includedirs
     {

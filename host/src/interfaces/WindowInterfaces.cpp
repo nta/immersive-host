@@ -42,7 +42,7 @@ static HRESULT STDMETHODCALLTYPE Activate(ICoreWindow* window)
 	ApplicationViewWindowingMode windowingMode;
 	windowView->get_PreferredLaunchWindowingMode(&windowingMode);
 
-	HWND hWnd = ImHost_GetCoreWindowHandle();
+	/*HWND hWnd = ImHost_GetCoreWindowHandle();
 	RECT rect;
 	GetWindowRect(hWnd, &rect);
 
@@ -76,7 +76,7 @@ static HRESULT STDMETHODCALLTYPE Activate(ICoreWindow* window)
 		}
 
 		ShowWindow(ImHost_GetCoreWindowHandle(), SW_SHOW);
-	}).detach();
+	}).detach();*/
 
 	return g_origActivate(window);
 }
@@ -98,7 +98,7 @@ public:
 		std::shared_ptr<PackageIdentity> packageIdentity = GetCurrentPackageIdentity();
 
 		ComPtr<ICoreWindow> coreWindow;
-		HRESULT hr = privateCreateCoreWindow(IMMERSIVE_BODY, packageIdentity->GetDisplayName().c_str(), 0, 0, 1024, 768, 0, ImHost_GetCoreWindowHandle(), IID_ICoreWindow, (void**)coreWindow.GetAddressOf());
+		HRESULT hr = privateCreateCoreWindow(IMMERSIVE_BODY, packageIdentity->GetDisplayName().c_str(), 0, 0, 1024, 768, 0, nullptr, IID_ICoreWindow, (void**)coreWindow.GetAddressOf());
 
 		/*wchar_t buffer[64];
 		swprintf(buffer, L"%p", ImHost_GetCoreWindowHandle());
@@ -516,6 +516,9 @@ HRESULT WINAPI MakeFactory(HSTRING hString, IActivationFactory** outFactory)
 	return ptr.CopyTo(outFactory);
 }
 
+extern DWORD g_activationUnlock;
+extern DWORD g_activationLock;
+
 void InitializeWindowInterfaces()
 {
 	//ImHost_AddActivationFactory(RuntimeClass_Windows_UI_ViewManagement_ApplicationView, MakeFactory<ApplicationViewStatics>);
@@ -526,18 +529,33 @@ void InitializeWindowInterfaces()
 
 		std::wstring id = identity->GetPrimaryAppId();
 
+		HSTRING string;
+		WindowsCreateString(id.c_str(), id.length(), &string);
+
+		ComPtr<IActivatableApplication> factory;
+		RoGetActivationFactory(string, GUID_IActivatableApplication, (void**)factory.ReleaseAndGetAddressOf());
+
+		ComPtr<ICoreWindowFactory> windowFactory = Make<CoreWindowFactory>();
+		ComPtr<IActivatedEventArgs> eventArgs = Make<ActivatedEventArgs>();
+
 		std::thread([=] ()
 		{
-			HSTRING string;
-			WindowsCreateString(id.c_str(), id.length(), &string);
+			// TODO: fixme
+			DWORD oldUnlock = g_activationUnlock;
+			WaitOnAddress(&g_activationUnlock, &oldUnlock, sizeof(g_activationUnlock), INFINITE);
 
-			ComPtr<IActivatableApplication> factory;
-			RoGetActivationFactory(string, GUID_IActivatableApplication, (void**)factory.ReleaseAndGetAddressOf());
+			HRESULT hr = factory->Activate(windowFactory.Get(), string, eventArgs.Get());
 
-			ComPtr<ICoreWindowFactory> windowFactory = Make<CoreWindowFactory>();
-			ComPtr<IActivatedEventArgs> eventArgs = Make<ActivatedEventArgs>();
+			g_activationLock++;
+			WakeByAddressAll(&g_activationLock);
 
-			factory->Activate(windowFactory.Get(), string, eventArgs.Get());
+			printf("");
 		}).detach();
+
+		char* mB = (char*)GetModuleHandle(nullptr);
+
+		DWORD a;
+		VirtualProtect(mB + 0x1A47DC0, 1, PAGE_EXECUTE_READWRITE, &a);
+		*(BYTE*)(mB + 0x1A47DC0) = 0xC3;
 	});
 }

@@ -477,8 +477,290 @@ bool ExecutableLoader::MapSection()
 	return true;
 }
 
+class UserLibrary
+{
+private:
+	std::vector<uint8_t> m_libraryBuffer;
+
+public:
+	UserLibrary(const wchar_t* fileName);
+
+	const uint8_t* GetExportCode(const char* name) const;
+
+	const uint8_t* GetOffsetPointer(uint32_t offset) const;
+};
+
+UserLibrary::UserLibrary(const wchar_t* fileName)
+{
+	FILE* f = _wfopen(fileName, L"rb");
+
+	if (f)
+	{
+		fseek(f, 0, SEEK_END);
+		m_libraryBuffer.resize(ftell(f));
+
+		fseek(f, 0, SEEK_SET);
+		fread(&m_libraryBuffer[0], 1, m_libraryBuffer.size(), f);
+
+		fclose(f);
+	}
+}
+
+const uint8_t* UserLibrary::GetExportCode(const char* getName) const
+{
+	// get the DOS header
+	IMAGE_DOS_HEADER* header = (IMAGE_DOS_HEADER*)&m_libraryBuffer[0];
+
+	if (header->e_magic != IMAGE_DOS_SIGNATURE)
+	{
+		return nullptr;
+	}
+
+	// get the NT header
+	const IMAGE_NT_HEADERS* ntHeader = (const IMAGE_NT_HEADERS*)&m_libraryBuffer[header->e_lfanew];
+
+	// find the export directory
+	auto exportDirectoryData = ntHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+
+	// get the export directory
+	const IMAGE_EXPORT_DIRECTORY* exportDirectory = (const IMAGE_EXPORT_DIRECTORY*)GetOffsetPointer(exportDirectoryData.VirtualAddress);
+
+	const uint32_t* names = (const uint32_t*)GetOffsetPointer(exportDirectory->AddressOfNames);
+	const uint16_t* ordinals = (const uint16_t*)GetOffsetPointer(exportDirectory->AddressOfNameOrdinals);
+	const uint32_t* functions = (const uint32_t*)GetOffsetPointer(exportDirectory->AddressOfFunctions);
+
+	for (int i = 0; i < exportDirectory->NumberOfNames; i++)
+	{
+		const char* name = (const char*)GetOffsetPointer(names[i]);
+
+		if (_stricmp(name, getName) == 0)
+		{
+			return GetOffsetPointer(functions[ordinals[i]]);
+		}
+	}
+
+	return nullptr;
+}
+
+const uint8_t* UserLibrary::GetOffsetPointer(uint32_t offset) const
+{
+	// get the DOS header
+	const IMAGE_DOS_HEADER* header = (const IMAGE_DOS_HEADER*)&m_libraryBuffer[0];
+
+	// get the NT header
+	const IMAGE_NT_HEADERS* ntHeader = (const IMAGE_NT_HEADERS*)&m_libraryBuffer[header->e_lfanew];
+
+	// loop through each sections to find where our offset is
+	const IMAGE_SECTION_HEADER* sections = IMAGE_FIRST_SECTION(ntHeader);
+
+	for (int i = 0; i < ntHeader->FileHeader.NumberOfSections; i++)
+	{
+		uint32_t curRaw = sections[i].PointerToRawData;
+		uint32_t curVirt = sections[i].VirtualAddress;
+
+		if (offset >= curVirt && offset < curVirt + sections[i].SizeOfRawData)
+		{
+			offset -= curVirt;
+			offset += curRaw;
+
+			return &m_libraryBuffer[offset];
+		}
+	}
+
+	return nullptr;
+}
+
+static void* origCloseHandle;
+
+typedef struct _OBJECT_HANDLE_ATTRIBUTE_INFORMATION
+{
+	BOOLEAN Inherit;
+	BOOLEAN ProtectFromClose;
+} OBJECT_HANDLE_ATTRIBUTE_INFORMATION, *POBJECT_HANDLE_ATTRIBUTE_INFORMATION;
+
+#pragma comment(lib, "ntdll.lib")
+
+struct NtCloseHook : public jitasm::Frontend
+{
+	NtCloseHook()
+	{
+
+	}
+
+	static NTSTATUS ValidateHandle(HANDLE handle)
+	{
+		char info[16];
+
+		if (NtQueryObject(handle, (OBJECT_INFORMATION_CLASS)4, &info, sizeof(OBJECT_HANDLE_ATTRIBUTE_INFORMATION), nullptr) >= 0)
+		{
+			return 0;
+		}
+		else
+		{
+			return STATUS_INVALID_HANDLE;
+		}
+	}
+
+	void InternalMain()
+	{
+		push(rcx);
+
+		mov(rax, (uint64_t)&ValidateHandle);
+		call(rax);
+
+		pop(rcx);
+
+		cmp(eax, STATUS_INVALID_HANDLE);
+		je("doReturn");
+
+		mov(rax, (uint64_t)origCloseHandle);
+		push(rax); // to return here, as there seems to be no jump-to-rax in jitasm
+
+		L("doReturn");
+		ret();
+	}
+};
+
+class NtdllHooks
+{
+private:
+	UserLibrary m_ntdll;
+
+private:
+	void HookHandleClose();
+
+	void HookQueryInformationProcess();
+
+public:
+	NtdllHooks(const wchar_t* ntdllPath);
+
+	void Install();
+};
+
+NtdllHooks::NtdllHooks(const wchar_t* ntdllPath)
+	: m_ntdll(ntdllPath)
+{
+}
+
+void NtdllHooks::Install()
+{
+	//HookHandleClose();
+	//HookQueryInformationProcess();
+}
+
+void NtdllHooks::HookHandleClose()
+{
+	// hook NtClose (STATUS_INVALID_HANDLE debugger detection)
+	uint8_t* code = (uint8_t*)GetProcAddress(GetModuleHandle(L"ntdll.dll"), "NtClose");
+
+	origCloseHandle = VirtualAlloc(nullptr, 1024, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	memcpy(origCloseHandle, m_ntdll.GetExportCode("NtClose"), 1024);
+
+	NtCloseHook* hook = new NtCloseHook;
+	hook->Assemble();
+
+	DWORD oldProtect;
+	VirtualProtect(code, 15, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+	*(uint8_t*)code = 0x48;
+	*(uint8_t*)(code + 1) = 0xb8;
+
+	*(uint64_t*)(code + 2) = (uint64_t)hook->GetCode();
+
+	*(uint16_t*)(code + 10) = 0xE0FF;
+}
+
+static void* origQIP;
+static DWORD explorerPid;
+
+#include <ntstatus.h>
+
+typedef NTSTATUS(*NtQueryInformationProcessType)(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL);
+
+static NTSTATUS NtQueryInformationProcessHook(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL)
+{
+	NTSTATUS status = ((NtQueryInformationProcessType)origQIP)(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
+
+	if (NT_SUCCESS(status))
+	{
+		if (ProcessInformationClass == ProcessBasicInformation)
+		{
+			((PPROCESS_BASIC_INFORMATION)ProcessInformation)->InheritedFromUniqueProcessId = (DWORD64)explorerPid;
+		}
+		else if (ProcessInformationClass == 30) // ProcessDebugObjectHandle
+		{
+			*(HANDLE*)ProcessInformation = 0;
+
+			return STATUS_PORT_NOT_SET;
+		}
+		else if (ProcessInformationClass == 7) // ProcessDebugPort
+		{
+			*(HANDLE*)ProcessInformation = 0;
+		}
+		else if (ProcessInformationClass == 31)
+		{
+			*(ULONG*)ProcessInformation = 1;
+		}
+	}
+
+	return status;
+}
+
+void NtdllHooks::HookQueryInformationProcess()
+{
+	uint8_t* code = (uint8_t*)GetProcAddress(GetModuleHandle(L"ntdll.dll"), "NtQueryInformationProcess");
+
+	HWND shellWindow = GetShellWindow();
+	GetWindowThreadProcessId(shellWindow, &explorerPid);
+
+	origQIP = VirtualAlloc(nullptr, 1024, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	memcpy(origQIP, m_ntdll.GetExportCode("NtQueryInformationProcess"), 1024);
+
+	/*NtQueryInformationProcessHook* hook = new NtQueryInformationProcessHook;
+	hook->Assemble();*/
+
+	DWORD oldProtect;
+	VirtualProtect(code, 15, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+	*(uint8_t*)code = 0x48;
+	*(uint8_t*)(code + 1) = 0xb8;
+
+	*(uint64_t*)(code + 2) = (uint64_t)NtQueryInformationProcessHook;
+
+	*(uint16_t*)(code + 10) = 0xE0FF;
+}
+
 void ExecutableLoader::Run()
 {
+	// set BeingDebugged
+	PPEB peb = (PPEB)__readgsqword(0x60);
+	peb->BeingDebugged = false;
+
+	// set GlobalFlags
+	*(DWORD*)((char*)peb + 0xBC) &= ~0x70;
+
+	{
+		// user library stuff ('safe' ntdll hooking callbacks)
+		wchar_t ntdllPath[MAX_PATH];
+		GetModuleFileName(GetModuleHandle(L"ntdll.dll"), ntdllPath, _countof(ntdllPath));
+
+		NtdllHooks hooks(ntdllPath);
+		hooks.Install();
+	}
+
+	//if (CoreIsDebuggerPresent())
+	{
+		// NOP OutputDebugStringA; the debugger doesn't like multiple async exceptions
+		uint8_t* func = (uint8_t*)OutputDebugStringA;
+
+		DWORD oldProtect;
+		VirtualProtect(func, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+		//*func = 0xC3;
+
+		VirtualProtect(func, 1, oldProtect, &oldProtect);
+	}
+
 	IMAGE_DOS_HEADER* dosHeader = reinterpret_cast<IMAGE_DOS_HEADER*>(m_executableHandle);
 
 	IMAGE_NT_HEADERS* ntHeader = GetTargetRVA<IMAGE_NT_HEADERS>(dosHeader->e_lfanew);

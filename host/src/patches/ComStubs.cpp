@@ -95,6 +95,15 @@ HRESULT WINAPI RoGetActivationFactory_Custom(HSTRING activatableClassId, REFIID 
 	HRESULT hr;
 	auto it = g_activationFactories.find(WindowsGetStringRawBuffer(activatableClassId, nullptr));
 
+	wchar_t buffer[1024];
+	wsprintf(buffer, L"GAF: %s\n", WindowsGetStringRawBuffer(activatableClassId, nullptr));
+	OutputDebugStringW(buffer);
+
+	if (wcsstr(WindowsGetStringRawBuffer(activatableClassId, nullptr), L"CoreApplication"))
+	{
+		printf("");
+	}
+
 	HString overrideString;
 
 	if (it != g_activationFactories.end())
@@ -124,6 +133,10 @@ HRESULT WINAPI RoActivateInstance_Custom(HSTRING activatableClassId, IInspectabl
 {
 	HRESULT hr = S_OK;
 	auto it = g_activationFactories.find(WindowsGetStringRawBuffer(activatableClassId, nullptr));
+
+	wchar_t buffer[1024];
+	wsprintf(buffer, L"AI: %s\n", WindowsGetStringRawBuffer(activatableClassId, nullptr));
+	OutputDebugStringW(buffer);
 
 	if (it != g_activationFactories.end())
 	{

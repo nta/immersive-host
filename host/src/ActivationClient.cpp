@@ -19,6 +19,7 @@ HRESULT GetActivationClient(HANDLE hPipe, IActivationProxy** proxy);
 NTSTATUS(NTAPI* _RtlDeriveCapabilitySidsFromName)(PUNICODE_STRING capabilityName, PSID ntSid, PSID appPackageSid);
 extern "C" NTSTATUS NTAPI NtSetInformationToken(HANDLE, TOKEN_INFORMATION_CLASS, PVOID, ULONG);
 
+#pragma comment(lib, "synchronization.lib")
 #pragma comment(lib, "rpcrt4.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "userenv.lib")

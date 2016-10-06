@@ -13,6 +13,7 @@ bool ActivationClient_Intercept(int argc, char** argv);
 void PrepareActivation();
 
 void RegisterStoreOverride();
+void RegisterStoreOverrideRS1();
 void RegisterExtendedExecution();
 
 void InitializeWindowInterfaces();
@@ -48,7 +49,8 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	std::wstring packagePath = L"C:\\Program Files\\WindowsApps\\Microsoft.DeltaPC_1.6.0.0_x64__8wekyb3d8bbwe";
+	//std::wstring packagePath = L"C:\\Program Files\\WindowsApps\\Microsoft.DeltaPC_1.6.0.0_x64__8wekyb3d8bbwe";
+	std::wstring packagePath = L"U:\\DLs\\dumped";
 
 	if (argc >= 2)
 	{
@@ -77,6 +79,7 @@ int main(int argc, char** argv)
 	if (true)
 	{
 		RegisterStoreOverride();
+		RegisterStoreOverrideRS1();
 	}
 
 	RegisterExtendedExecution();
@@ -86,7 +89,7 @@ int main(int argc, char** argv)
 	PatchTokenBroker();
 
 	unlink("B:\\tools\\bigstate\\crash.detect");
-	LoadLibrary(L"S:\\games\\steam\\gameoverlayrenderer64.dll");
+	//LoadLibrary(L"S:\\games\\steam\\gameoverlayrenderer64.dll");
 
 	// initialize
 	MH_Initialize();
