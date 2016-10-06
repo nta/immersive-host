@@ -22,6 +22,7 @@ void InitializeComStubs();
 void InitializePackageStubs();
 void InitializeKeyStubs();
 void InitializeUserStubs();
+void InitializeMurderScene();
 
 void PatchTokenBroker();
 
@@ -100,6 +101,7 @@ int main(int argc, char** argv)
 	InitializeKeyStubs();
 	InitializeWindowInterfaces();
 	InitializeUserStubs();
+	InitializeMurderScene();
 
 	SetDllDirectory(identity->GetApplicationRoot().c_str());
 

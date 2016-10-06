@@ -126,3 +126,6 @@ using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 
 #include <imhostapi.h>
+
+const char* va(const char* string, ...);
+const wchar_t* va(const wchar_t* string, ...);
