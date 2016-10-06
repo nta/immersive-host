@@ -24,7 +24,7 @@ HWND WINAPI CreateWindowInBandExImpl(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpCl
 
 	if (windowingMode != ApplicationViewWindowingMode_FullScreen)
 	{
-		dwStyle |= WS_OVERLAPPEDWINDOW;
+		//dwStyle |= WS_OVERLAPPEDWINDOW;
 	}
 
 	hWndParent = nullptr;// ImHost_GetCoreWindowHandle();
@@ -32,6 +32,13 @@ HWND WINAPI CreateWindowInBandExImpl(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpCl
 	//dwStyle |= WS_CHILD;
 	dwStyle |= WS_OVERLAPPEDWINDOW;
 	dwStyle &= ~WS_POPUP;
+	//dwStyle &= ~WS_OVERLAPPEDWINDOW;
+	//dwStyle = WS_POPUP;
+
+	//X = 0;
+	//Y = 0;
+	//nWidth = 2560;
+	//nHeight = 1440;
 
 	std::wstring windowTitle = std::wstring(lpWindowName) + L" (ImmersiveHost)";
 

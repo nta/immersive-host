@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 	PatchTokenBroker();
 
 	unlink("B:\\tools\\bigstate\\crash.detect");
-	//LoadLibrary(L"S:\\games\\steam\\gameoverlayrenderer64.dll");
+	LoadLibrary(L"S:\\games\\steam\\gameoverlayrenderer64.dll");
 
 	// initialize
 	MH_Initialize();
