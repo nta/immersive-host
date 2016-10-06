@@ -1,5 +1,7 @@
 #include "StdInc.h"
 
+#include "Hooking.Patterns.h"
+
 #include <thread>
 
 #include <PackageIdentity.h>
@@ -525,6 +527,7 @@ void InitializeWindowInterfaces()
 
 	ImHost_AddActivationCallback([] ()
 	{
+		// mm
 		std::shared_ptr<PackageIdentity> identity = GetCurrentPackageIdentity();
 
 		std::wstring id = identity->GetPrimaryAppId();
@@ -551,11 +554,5 @@ void InitializeWindowInterfaces()
 
 			printf("");
 		}).detach();
-
-		char* mB = (char*)GetModuleHandle(nullptr);
-
-		DWORD a;
-		VirtualProtect(mB + 0x1A47DC0, 1, PAGE_EXECUTE_READWRITE, &a);
-		*(BYTE*)(mB + 0x1A47DC0) = 0xC3;
 	});
 }

@@ -1,4 +1,5 @@
 #include "StdInc.h"
+#include "Hooking.Patterns.h"
 
 #include <Windows.UI.Core.CoreWindowFactory.h>
 
@@ -39,6 +40,11 @@ HWND WINAPI CreateWindowInBandExImpl(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpCl
 	//Y = 0;
 	//nWidth = 2560;
 	//nHeight = 1440;
+
+	if (!lpWindowName)
+	{
+		lpWindowName = L"MEOW!";
+	}
 
 	std::wstring windowTitle = std::wstring(lpWindowName) + L" (ImmersiveHost)";
 
@@ -97,8 +103,31 @@ HWND ImHost_GetCoreWindowHandle()
 	return g_coreWindow;
 }
 
+int InitAfterDec()
+{
+	// temp fix for opus
+	char* mB = (char*)GetModuleHandle(nullptr);
+
+	auto pattern = hook::module_pattern(mB, "74 08 49 8B CF E8 ? ? ? ? 44 89");
+
+	if (pattern.size() > 0)
+	{
+		char* location = pattern.get(0).get<char>(6);
+		char* address = (location + *(int32_t*)location + 4);
+
+		DWORD a;
+		VirtualProtect(address, 1, PAGE_EXECUTE_READWRITE, &a);
+		*address = 0xC3;
+	}
+
+	return 0;
+}
+
 void InitializeUserStubs()
 {
+	LoadLibrary(L"vcruntime140_app.dll");
+
 	MH_CreateHookApi(L"user32.dll", "CreateWindowInBandEx", CreateWindowInBandExImpl, (void**)&g_origCreateWindowInBandEx);
+	MH_CreateHookApi(L"vcruntime140_app.dll", "__telemetry_main_invoke_trigger", InitAfterDec, nullptr);
 	MH_EnableHook(MH_ALL_HOOKS);
 }
