@@ -285,8 +285,9 @@ namespace ABI
 				}
 			};
 
+			// UUID is AlternateIID___FIAsyncOperationCompletedHandler_1_Windows__CNetworking__CXboxLive__CXboxLiveEndpointPairCreationResult in Windows.Networking.XboxLive.ProxyStub.dll
 			template <>
-			struct __declspec(uuid("AD57FA1D-DC6B-58D1-9F70-60CC47BF1CED"))
+			struct __declspec(uuid("AD57FA1D-DB1B-5DF5-9694-F71B9BD5625B"))
 				IAsyncOperationCompletedHandler<IXboxLiveEndpointPairCreationResult*> : IAsyncOperationCompletedHandler_impl<IXboxLiveEndpointPairCreationResult*>
 			{
 				static const wchar_t* z_get_rc_name_impl()
