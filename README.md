@@ -1,5 +1,7 @@
 # ImmersiveHost
 
+*(pending update)*
+
 ImmersiveHost is an attempt to host Immersive mode applications ("Windows Store applications", "Metro applications", "Modern UI applications", "UWP applications", etc.) in a more open context outside of the usual app container/package situations.
 
 This was an experiment around March of 2016, and was developed referencing mainly TH2 (10586/1511) and then-contemporary RS1/1607 releases of Windows 10. It also specifically targeted only a small set of applications, and probably would take some effort to get working again.
