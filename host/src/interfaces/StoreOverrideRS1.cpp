@@ -401,7 +401,13 @@ public:
 		__FIIterable_1_HSTRING *productKinds,
 		__FIAsyncOperation_1_Windows__CServices__CStore__CStoreProductQueryResult **operation)
 	{
-		return S_OK;
+		auto productsStub = Make<ProductQueryResultStub>();
+
+		ComPtr<IStoreProductQueryResult> ptr;
+		productsStub.As(&ptr);
+
+		auto operationStub = Make<AsyncOperationStub<StoreProductQueryResult*, IStoreProductQueryResult*>>(ptr);
+		return operationStub.CopyTo(operation);
 	}
 
 	virtual HRESULT STDMETHODCALLTYPE GetUserCollectionWithPagingAsync(
