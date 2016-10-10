@@ -32,6 +32,7 @@ project 'immersivehost'
     language 'C++'
     kind 'ConsoleApp'
     windowstarget '10.0.14393.0'
+    linkoptions '/stack:5000000,131072' -- for software such as Microsoft.SpartaUWP
 
     includedirs
     {

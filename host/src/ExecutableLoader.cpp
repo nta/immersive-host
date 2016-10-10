@@ -1,9 +1,6 @@
 #include "StdInc.h"
 #include "ExecutableLoader.h"
 
-// Microsoft.SpartaUWP seems to want a really large stack
-#pragma comment(linker, "/stack:5000000,131072")
-
 #include <jitasm.h>
 
 FARPROC MakeLogWrapper(const char* fname, FARPROC function)
