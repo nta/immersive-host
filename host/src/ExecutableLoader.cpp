@@ -1,6 +1,9 @@
 #include "StdInc.h"
 #include "ExecutableLoader.h"
 
+// Microsoft.SpartaUWP seems to want a really large stack
+#pragma comment(linker, "/stack:5000000,131072")
+
 #include <jitasm.h>
 
 FARPROC MakeLogWrapper(const char* fname, FARPROC function)
@@ -116,18 +119,21 @@ void ExecutableLoader::LoadTLS()
 
 	const IMAGE_TLS_DIRECTORY* sourceTls = GetTargetRVA<IMAGE_TLS_DIRECTORY>(ntHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS].VirtualAddress);
 
-	*(DWORD*)(sourceTls->AddressOfIndex) = 0;
+	if (sourceTls->AddressOfIndex)
+	{
+		*(DWORD*)(sourceTls->AddressOfIndex) = 0;
 
-	void* tlses = (void*)__readgsqword(0x58);
+		void* tlses = (void*)__readgsqword(0x58);
 
-	// note: 32-bit!
+		// note: 32-bit!
 #if defined(_M_IX86)
-	LPVOID tlsBase = *(LPVOID*)__readfsdword(0x2C);
+		LPVOID tlsBase = *(LPVOID*)__readfsdword(0x2C);
 #elif defined(_M_AMD64)
-	LPVOID tlsBase = *(LPVOID*)__readgsqword(0x58);
+		LPVOID tlsBase = *(LPVOID*)__readgsqword(0x58);
 #endif
 
-	memcpy(tlsBase, reinterpret_cast<void*>(sourceTls->StartAddressOfRawData), sourceTls->EndAddressOfRawData - sourceTls->StartAddressOfRawData);
+		memcpy(tlsBase, reinterpret_cast<void*>(sourceTls->StartAddressOfRawData), sourceTls->EndAddressOfRawData - sourceTls->StartAddressOfRawData);
+	}
 	//memcpy((void*)source->StartAddressOfRawData, reinterpret_cast<void*>(sourceTls->StartAddressOfRawData), sourceTls->EndAddressOfRawData - sourceTls->StartAddressOfRawData);
 }
 
