@@ -113,6 +113,14 @@ NTSTATUS WINAPI PsmRegisterAppStateChangeNotification_Custom(void* a1, void* a2,
 	return STATUS_SUCCESS;
 }
 
+HMODULE WINAPI LoadPackagedLibrary_Custom(
+	_In_       LPCWSTR lpwLibFileName,
+	_Reserved_ DWORD   Reserved
+)
+{
+	return LoadLibraryW(lpwLibFileName);
+}
+
 void InitializeKeyStubs()
 {
 	LoadLibrary(L"twinapi.appcore.dll");
@@ -120,5 +128,6 @@ void InitializeKeyStubs()
 	MH_CreateHookApi(L"ntdll.dll", "NtOpenKey", NtOpenKey_Custom, (void**)&g_origNtOpenKey);
 	MH_CreateHookApi(L"twinapi.appcore.dll", "PsmRegisterAppStateChangeNotification", PsmRegisterAppStateChangeNotification_Custom, nullptr);
 	MH_CreateHookApi(L"ntdll.dll", "LdrLoadDll", LdrLoadDll_Custom, (void**)&g_origLdrLoadDll);
+	MH_CreateHookApi(L"kernelbase.dll", "LoadPackagedLibrary", LoadPackagedLibrary_Custom, nullptr);
 	MH_EnableHook(MH_ALL_HOOKS);
 }
