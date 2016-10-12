@@ -31,15 +31,19 @@ HWND WINAPI CreateWindowInBandExImpl(_In_ DWORD dwExStyle, _In_opt_ LPCWSTR lpCl
 	hWndParent = nullptr;// ImHost_GetCoreWindowHandle();
 
 	//dwStyle |= WS_CHILD;
-	dwStyle |= WS_OVERLAPPEDWINDOW;
-	dwStyle &= ~WS_POPUP;
-	//dwStyle &= ~WS_OVERLAPPEDWINDOW;
-	//dwStyle = WS_POPUP;
+	//dwStyle |= WS_OVERLAPPEDWINDOW;
+	//dwStyle &= ~WS_POPUP;
+	dwStyle &= ~WS_OVERLAPPEDWINDOW;
+	dwStyle = WS_POPUP;
 
-	//X = 0;
-	//Y = 0;
-	//nWidth = 2560;
-	//nHeight = 1440;
+	HMONITOR primaryMonitor = MonitorFromPoint(POINT{ 0, 0 }, 0);
+	MONITORINFO mi = { sizeof(MONITORINFO) };
+	GetMonitorInfo(primaryMonitor, &mi);
+
+	X = mi.rcMonitor.left;
+	Y = mi.rcMonitor.top;
+	nWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+	nHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
 
 	if (!lpWindowName)
 	{
