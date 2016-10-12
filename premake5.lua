@@ -71,6 +71,13 @@ project 'elevationservice'
     language 'C++'
     kind 'ConsoleApp'
 
+    includedirs
+    {
+        'vendor/minhook/include'
+    }
+
+    links { 'minhook' }
+
     files
     {
         'service/**.h',

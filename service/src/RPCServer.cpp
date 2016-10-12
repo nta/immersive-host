@@ -1,3 +1,4 @@
+#define NTDDI_VERSION NTDDI_WINBLUE
 #include <windows.h>
 
 #define IPRT_NT_USE_WINTERNL
@@ -226,6 +227,177 @@ error_status_t set_token_appid(
 	}
 
 	return 0;
+}
+
+#include <netfw.h>
+#include <wrl.h>
+#include <psapi.h>
+#include <userenv.h>
+#include <sddl.h>
+#include <mutex>
+#include <MinHook.h>
+
+#pragma comment(lib, "userenv.lib")
+
+using namespace Microsoft::WRL;
+
+template<typename T>
+struct LocalAlloc_delete
+{
+	LocalAlloc_delete() {}
+	void operator()(T* p) throw() { LocalFree(p); }
+};
+
+template<typename T>
+using unique_localptr = std::unique_ptr<T, LocalAlloc_delete<T>>;
+
+static DWORD(NTAPI* g_origFwOpenPolicyStore)(WORD clientVersion, void* a2, int fwStoreType, int fwAccessRight, DWORD flags, void** policyStore);
+
+// reference: https://msdn.microsoft.com/en-us/library/cc231498.aspx (internal IDL)
+static DWORD FWOpenPolicyStore_Wrap(WORD clientVersion, void* a2, int fwStoreType, int fwAccessRight, DWORD flags, void** policyStore)
+{
+	if (fwStoreType == 2) // FW_STORE_TYPE_LOCAL
+	{
+		fwStoreType = 5; // FW_STORE_TYPE_DYNAMIC
+	}
+
+	return g_origFwOpenPolicyStore(clientVersion, a2, fwStoreType, fwAccessRight, flags, policyStore);
+}
+
+error_status_t update_firewall_rule(handle_t rpc_handle, unsigned long process_id, const wchar_t *orig_family_name)
+{
+	// hook stuff to actually use the dynamic policy and not the local one
+	static std::once_flag of;
+	std::call_once(of, [] ()
+	{
+		LoadLibrary(L"firewallapi.dll");
+
+		MH_Initialize();
+		MH_CreateHookApi(L"firewallapi.dll", "FWOpenPolicyStore", FWOpenPolicyStore_Wrap, (void**)&g_origFwOpenPolicyStore);
+		MH_EnableHook(MH_ALL_HOOKS);
+	});
+
+	// get the SID for the package family
+	PSID sid;
+
+	wchar_t* sidStringResult;
+	DeriveAppContainerSidFromAppContainerName(orig_family_name, &sid);
+
+	// convert to string
+	ConvertSidToStringSid(sid, &sidStringResult);
+
+	// get a pointer to the string
+	unique_localptr<wchar_t> sidString(sidStringResult);
+	sidStringResult = nullptr;
+
+	// free
+	FreeSid(sid);
+
+	// get the parent process path
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, process_id);
+
+	if (hProcess == INVALID_HANDLE_VALUE)
+	{
+		return GetLastError();
+	}
+
+	// get filename
+	wchar_t processFileName[1024] = { 0 };
+	GetModuleFileNameEx(hProcess, nullptr, processFileName, _countof(processFileName) - 1);
+
+	// close process handle
+	CloseHandle(hProcess);
+
+	// initialize COM
+	HRESULT hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
+
+	// check failure
+	if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
+	{
+		return hr;
+	}
+
+	// CoInitialize constructor scope - see https://blogs.msdn.microsoft.com/oldnewthing/20040520-00/?p=39243
+	// this is actually an important dummy scope for once :-)
+	{
+		// initialize the firewall API
+		ComPtr<INetFwPolicy2> policy;
+		hr = CoCreateInstance(__uuidof(NetFwPolicy2), nullptr, CLSCTX_INPROC_SERVER, __uuidof(INetFwPolicy2), (void**)policy.GetAddressOf());
+
+		if (SUCCEEDED(hr))
+		{
+			ComPtr<INetFwRules> rules;
+			hr = policy->get_Rules(rules.GetAddressOf());
+
+			if (SUCCEEDED(hr))
+			{
+				long numRules;
+				hr = rules->get_Count(&numRules);
+
+				if (SUCCEEDED(hr))
+				{
+					ComPtr<IUnknown> enumerator;
+					ComPtr<IEnumVARIANT> variantEnum;
+					hr = rules->get__NewEnum(enumerator.GetAddressOf());
+					enumerator.As(&variantEnum);
+
+					if (SUCCEEDED(hr))
+					{
+						VARIANT var;
+						ULONG cFetched;
+
+						while (variantEnum->Next(1, &var, &cFetched) == S_OK)
+						{
+							ComPtr<INetFwRule3> rule;
+							if (SUCCEEDED(var.pdispVal->QueryInterface<INetFwRule3>(rule.GetAddressOf())))
+							{
+								BSTR name;
+								rule->get_Name(&name);
+
+								if (wcsstr(name, L"Xbox")) // hoping this actually doesn't translated in localized Windows versions
+								{
+									BSTR appPackageId;
+									if (SUCCEEDED(rule->get_LocalAppPackageId(&appPackageId)))
+									{
+										if (appPackageId)
+										{
+											if (_wcsnicmp(appPackageId, sidString.get(), SysStringLen(appPackageId)) == 0)
+											{
+												BSTR procName = SysAllocString(processFileName);
+												HRESULT hr = rule->put_ApplicationName(procName);
+
+												if (SUCCEEDED(hr))
+												{
+													hr = rule->put_LocalAppPackageId(nullptr);
+
+													if (SUCCEEDED(hr))
+													{
+														hr = 0;
+													}
+												}
+
+												SysFreeString(procName);
+											}
+
+											SysFreeString(appPackageId);
+										}
+									}
+								}
+
+								SysFreeString(name);
+							}
+
+							VariantClear(&var);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	CoUninitialize();
+
+	return hr;
 }
 
 void __RPC_FAR * __RPC_USER midl_user_allocate(size_t len)

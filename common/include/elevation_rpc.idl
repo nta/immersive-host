@@ -7,4 +7,5 @@ import "wtypes.idl";
 interface elevation_rpc
 {
 	error_status_t set_token_appid([in] handle_t rpc_handle, [in] unsigned long process_id, [in, string] const wchar_t* full_name, [in, string] const wchar_t* app_id, [in, string] const wchar_t* family_name);
+	error_status_t update_firewall_rule([in] handle_t rpc_handle, [in] unsigned long process_id, [in, string] const wchar_t* orig_family_name);
 }
