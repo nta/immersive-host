@@ -107,6 +107,45 @@ HWND ImHost_GetCoreWindowHandle()
 	return g_coreWindow;
 }
 
+void WriteNetworkLog(int type, const char* logEntry, ...)
+{
+	FILE* log = fopen("B:\\dev\\i-h\\game.log", "a");
+
+	if (log)
+	{
+		va_list ap;
+		va_start(ap, logEntry);
+		vfprintf(log, logEntry, ap);
+		va_end(ap);
+
+		fprintf(log, "\n");
+
+		fclose(log);
+	}
+}
+
+#include <PackageIdentity.h>
+#include "../../build/elevation_rpc_h.h"
+
+void DuplicateNetworkFirewallRule()
+{
+	if (ImHost_IsActivationProxy())
+	{
+		return;
+	}
+
+	RPC_WSTR stringBinding = nullptr;
+	RpcStringBindingCompose(nullptr, reinterpret_cast<RPC_WSTR>(L"ncacn_np"), nullptr, reinterpret_cast<RPC_WSTR>(L"\\pipe\\ImmersiveElevationServer"), nullptr, &stringBinding);
+
+	RPC_BINDING_HANDLE bindingHandle;
+	RpcBindingFromStringBinding(stringBinding, &bindingHandle);
+
+	update_firewall_rule(bindingHandle, GetCurrentProcessId(), GetCurrentPackageIdentity()->GetFamilyName().c_str());
+
+	RpcStringFree(&stringBinding);
+	RpcBindingFree(&bindingHandle);
+}
+
 int InitAfterDec()
 {
 	// temp fix for opus
@@ -124,8 +163,22 @@ int InitAfterDec()
 		*address = 0xC3;
 	}
 
+	// opus #2: net log api
+	pattern = hook::module_pattern(mB, "48 89 74 24 ? 48 8D 54 24 ? 4C 8B CB");
+
+	for (int i = 0; i < pattern.size(); i++)
+	{
+		char* address = pattern.get(i).get<char>(-0x27);
+
+		MH_CreateHook(address, WriteNetworkLog, nullptr);
+	}
+
+	MH_EnableHook(MH_ALL_HOOKS);
+
 	return 0;
 }
+
+#include <thread>
 
 void InitializeUserStubs()
 {
@@ -134,4 +187,16 @@ void InitializeUserStubs()
 	MH_CreateHookApi(L"user32.dll", "CreateWindowInBandEx", CreateWindowInBandExImpl, (void**)&g_origCreateWindowInBandEx);
 	MH_CreateHookApi(L"vcruntime140_app.dll", "__telemetry_main_invoke_trigger", InitAfterDec, nullptr);
 	MH_EnableHook(MH_ALL_HOOKS);
+
+	std::thread([] ()
+	{
+		Sleep(10000);
+
+		while (true)
+		{
+			Sleep(10000);
+
+			DuplicateNetworkFirewallRule();
+		}
+	}).detach();
 }
