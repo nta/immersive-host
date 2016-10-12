@@ -10,6 +10,7 @@
 #include <functional>
 #include "ErrorHandling.h"
 
+void TraceLogIfFailed(const char* file, int line, const char* function, HRESULT hr);
 
 // Helper for marking our callback delegates as agile, by mixing in FtmBase.
 // Without this WinRT would marshal everything back to the UI thread.
@@ -112,6 +113,8 @@ protected:
             // Either we are now running on the threadpool, or we must report that something went wrong.
             if (FAILED(hr))
             {
+				TraceLogIfFailed(__FILE__, __LINE__, __FUNCTION__, hr);
+
                 (void)TryTransitionToError(hr);
                 FireCompletion();
             }

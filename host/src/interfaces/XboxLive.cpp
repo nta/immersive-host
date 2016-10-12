@@ -1,4 +1,41 @@
 #include "StdInc.h"
+#include <strsafe.h>
+#include <comdef.h>
+#include <PackageIdentity.h>
+#include <thread>
+
+void TraceToLog(const char* file, int line, const char* function, const char* additional = "")
+{
+	char buffer[32768];
+	StringCchPrintfA(buffer, _countof(buffer), "%s(%i): %s%s\n", file, line, function, additional);
+
+	FILE* log = fopen("B:\\dev\\i-h\\i-hlog.txt", "a");
+
+	if (log)
+	{
+		fprintf(log, "%s", buffer);
+		fclose(log);
+	}
+}
+
+void TraceLogIfFailed(const char* file, int line, const char* function, HRESULT hr)
+{
+	if (FAILED(hr))
+	{
+		_com_error errData(hr);
+
+		wchar_t addBuffer[2048];
+		StringCchPrintfW(addBuffer, _countof(addBuffer), L" %08x %s", hr, errData.ErrorMessage());
+
+		char addBufferNarrow[2048];
+		wcstombs(addBufferNarrow, addBuffer, _countof(addBufferNarrow));
+
+		TraceToLog(file, line, function, addBufferNarrow);
+	}
+}
+
+#define TraceFunction() TraceToLog(__FILE__, __LINE__, __FUNCTION__)
+#define TraceIfFailed(hr) TraceLogIfFailed(__FILE__, __LINE__, __FUNCTION__, hr)
 
 class IXboxLiveDeviceAddress;
 class IXboxLiveEndpointPairTemplate;
@@ -79,11 +116,18 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IXboxLiveDeviceAddress> original)
 	{
+		TraceFunction();
+
 		m_original = original;
 
 		auto cb = Callback<ITypedEventHandler<IXboxLiveDeviceAddress*, IInspectable*>>([=] (IXboxLiveDeviceAddress* sender, IInspectable* args)
 		{
-			return m_snapshotChangedEvent.InvokeAll(this, args);
+			std::thread([=] ()
+			{
+				m_snapshotChangedEvent.InvokeAll(this, args);
+			}).detach();
+
+			return S_OK;
 		});
 
 		EventRegistrationToken token;
@@ -94,36 +138,50 @@ public:
 
 	STDMETHOD(GetOriginalPointer)(REFIID iid, void** ptr) override
 	{
+		TraceFunction();
+
 		return m_original.CopyTo(iid, ptr);
 	}
 
 	STDMETHOD(add_SnapshotChanged)(ABI::Windows::Foundation::ITypedEventHandler<IXboxLiveDeviceAddress*, IInspectable*>* a1, EventRegistrationToken* a2) override
 	{
+		TraceFunction();
+
 		return m_snapshotChangedEvent.Add(a1, a2);
 	}
 
 	STDMETHOD(remove_SnapshotChanged)(EventRegistrationToken a1) override
 	{
+		TraceFunction();
+
 		return m_snapshotChangedEvent.Remove(a1);
 	}
 
 	STDMETHOD(GetSnapshotAsBase64)(HSTRING* a1) override
 	{
+		TraceFunction();
+
 		return m_original->GetSnapshotAsBase64(a1);
 	}
 
 	STDMETHOD(GetSnapshotAsBuffer)(ABI::Windows::Storage::Streams::IBuffer** a1) override
 	{
+		TraceFunction();
+
 		return m_original->GetSnapshotAsBuffer(a1);
 	}
 
 	STDMETHOD(GetSnapshotAsBytes)(uint32_t a1, uint8_t* a2, uint32_t* a3) override
 	{
+		TraceFunction();
+
 		return m_original->GetSnapshotAsBytes(a1, a2, a3);
 	}
 
 	STDMETHOD(Compare)(IXboxLiveDeviceAddress* a1, int* a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> device = a1;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -136,16 +194,22 @@ public:
 	}
 	STDMETHOD(get_IsValid)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_original->get_IsValid(a1);
 	}
 
 	STDMETHOD(get_IsLocal)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_original->get_IsLocal(a1);
 	}
 
 	STDMETHOD(get_NetworkAccessKind)(int* a1) override
 	{
+		TraceFunction();
+
 		return m_original->get_NetworkAccessKind(a1);
 	}
 };
@@ -350,6 +414,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IXboxLiveEndpointPair> origPair)
 	{
+		TraceFunction();
+
 		origPair.As(&m_originalPtr);
 
 		return S_OK;
@@ -357,31 +423,43 @@ public:
 
 	STDMETHOD(add_StateChanged)(ABI::Windows::Foundation::ITypedEventHandler<void*, void*>* a1, EventRegistrationToken* a2) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->add_StateChanged(a1, a2);
 	}
 
 	STDMETHOD(remove_StateChanged)(EventRegistrationToken a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->remove_StateChanged(a1);
 	}
 
 	STDMETHOD(DeleteAsync)(ABI::Windows::Foundation::IAsyncAction* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->DeleteAsync(a1);
 	}
 
 	STDMETHOD(GetRemoteSocketAddressBytes)(uint32_t a1, BYTE* a2) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->GetRemoteSocketAddressBytes(a1, a2);
 	}
 
 	STDMETHOD(GetLocalSocketAddressBytes)(uint32_t a1, BYTE* a2) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->GetLocalSocketAddressBytes(a1, a2);
 	}
 
 	STDMETHOD(get_State)(int* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_State(a1);
 	}
 
@@ -391,21 +469,29 @@ public:
 
 	STDMETHOD(get_RemoteHostName)(ABI::Windows::Networking::IHostName** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_RemoteHostName(a1);
 	}
 
 	STDMETHOD(get_RemotePort)(HSTRING* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_RemotePort(a1);
 	}
 
 	STDMETHOD(get_LocalHostName)(ABI::Windows::Networking::IHostName** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_LocalHostName(a1);
 	}
 
 	STDMETHOD(get_LocalPort)(HSTRING* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_LocalPort(a1);
 	}
 };
@@ -418,6 +504,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IXboxLiveEndpointPairCreationResult> origResult)
 	{
+		TraceFunction();
+
 		origResult.As(&m_originalPtr);
 
 		return S_OK;
@@ -427,11 +515,15 @@ public:
 
 	STDMETHOD(get_Status)(int* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_Status(a1);
 	}
 
 	STDMETHOD(get_IsExistingPathEvaluation)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_IsExistingPathEvaluation(a1);
 	}
 
@@ -448,6 +540,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IXboxLiveInboundEndpointPairCreatedEventArgs> ptr)
 	{
+		TraceFunction();
+
 		m_originalPtr = ptr;
 
 		return S_OK;
@@ -455,6 +549,8 @@ public:
 
 	STDMETHOD(get_EndpointPair)(IXboxLiveEndpointPair** pair) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveEndpointPair> ptr;
 		HRESULT hr = m_originalPtr->get_EndpointPair(ptr.GetAddressOf());
 
@@ -476,12 +572,15 @@ private:
 	ComPtr<IXboxLiveEndpointPairTemplate> m_originalPtr;
 
 	EventSource<ITypedEventHandler<IXboxLiveEndpointPairTemplate*, IXboxLiveInboundEndpointPairCreatedEventArgs*>> m_epCreated;
+	ComPtr<ITypedEventHandler<IXboxLiveEndpointPairTemplate*, IXboxLiveInboundEndpointPairCreatedEventArgs*>> m_callback;
 
 private:
 	HRESULT DoCreateEndpointPair(const std::function<HRESULT(IAsyncOperation<IXboxLiveEndpointPairCreationResult*>**, IXboxLiveDeviceAddress*)>& fn, IXboxLiveDeviceAddress* address, ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>** result)
 	{
 		ComPtr<IXboxLiveDeviceAddress> device = address;
 		ComPtr<IHasOriginalPtr> hasOriginal;
+
+		TraceFunction();
 
 		if (SUCCEEDED(device.As(&hasOriginal)))
 		{
@@ -491,10 +590,14 @@ private:
 		ComPtr<ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>> origOperation;
 		HRESULT hr = fn(origOperation.GetAddressOf(), device.Get());
 
+		TraceIfFailed(hr);
+
 		if (SUCCEEDED(hr))
 		{
 			auto operation = Make<AsyncOperation<IXboxLiveEndpointPairCreationResult>>(origOperation, [=] ()
 			{
+				TraceFunction();
+
 				ComPtr<IXboxLiveEndpointPairCreationResult> origResults;
 				origOperation->GetResults(origResults.GetAddressOf());
 
@@ -507,6 +610,8 @@ private:
 			hr = operation.CopyTo(result);
 		}
 
+		TraceIfFailed(hr);
+
 		return hr;
 	}
 
@@ -515,8 +620,12 @@ public:
 	{
 		ptr.As(&m_originalPtr);
 
-		auto cb = Callback<ITypedEventHandler<IXboxLiveEndpointPairTemplate*, IXboxLiveInboundEndpointPairCreatedEventArgs*>>([=] (IXboxLiveEndpointPairTemplate* sender, IXboxLiveInboundEndpointPairCreatedEventArgs* args)
+		TraceFunction();
+
+		m_callback = Callback<ITypedEventHandler<IXboxLiveEndpointPairTemplate*, IXboxLiveInboundEndpointPairCreatedEventArgs*>>([=] (IXboxLiveEndpointPairTemplate* sender, IXboxLiveInboundEndpointPairCreatedEventArgs* args)
 		{
+			TraceFunction();
+
 			ComPtr<IXboxLiveInboundEndpointPairCreatedEventArgs> argsPtr(args);
 
 			ComPtr<XboxLiveInboundEndpointPairCreatedEventArgs> ev;
@@ -526,73 +635,99 @@ public:
 		});
 
 		EventRegistrationToken token;
-		m_originalPtr->add_InboundEndpointPairCreated(cb.Get(), &token);
+		m_originalPtr->add_InboundEndpointPairCreated(m_callback.Get(), &token);
 
 		return S_OK;
 	}
 
 	STDMETHOD(add_InboundEndpointPairCreated)(ABI::Windows::Foundation::ITypedEventHandler<IXboxLiveEndpointPairTemplate*, IXboxLiveInboundEndpointPairCreatedEventArgs*>* a1, EventRegistrationToken* a2) override
 	{
+		TraceFunction();
+
 		return m_epCreated.Add(a1, a2);
 	}
 
 	STDMETHOD(remove_InboundEndpointPairCreated)(EventRegistrationToken a1) override
 	{
+		TraceFunction();
+
 		return m_epCreated.Remove(a1);
 	}
 
 	STDMETHOD(CreateEndpointPairDefaultAsync)(IXboxLiveDeviceAddress* a1, ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>** a2) override
 	{
+		TraceFunction();
+
 		return DoCreateEndpointPair(std::bind(&IXboxLiveEndpointPairTemplate::CreateEndpointPairDefaultAsync, m_originalPtr.Get(), std::placeholders::_2, std::placeholders::_1), a1, a2);
 	}
 
 	STDMETHOD(CreateEndpointPairWithBehaviorsAsync)(IXboxLiveDeviceAddress* a1, int a2, ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>** a3) override
 	{
+		TraceFunction();
+
 		return DoCreateEndpointPair(std::bind(&IXboxLiveEndpointPairTemplate::CreateEndpointPairWithBehaviorsAsync, m_originalPtr.Get(), std::placeholders::_2, a2, std::placeholders::_1), a1, a3);
 	}
 
 	STDMETHOD(CreateEndpointPairForPortsDefaultAsync)(IXboxLiveDeviceAddress* a1, HSTRING a2, HSTRING a3, ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>** a4) override
 	{
+		TraceFunction();
+
 		return DoCreateEndpointPair(std::bind(&IXboxLiveEndpointPairTemplate::CreateEndpointPairForPortsDefaultAsync, m_originalPtr.Get(), std::placeholders::_2, a2, a3, std::placeholders::_1), a1, a4);
 	}
 
 	STDMETHOD(CreateEndpointPairForPortsWithBehaviorsAsync)(IXboxLiveDeviceAddress* a1, HSTRING a2, HSTRING a3, int a4, ABI::Windows::Foundation::IAsyncOperation<IXboxLiveEndpointPairCreationResult*>** a5) override
 	{
+		TraceFunction();
+
 		return DoCreateEndpointPair(std::bind(&IXboxLiveEndpointPairTemplate::CreateEndpointPairForPortsWithBehaviorsAsync, m_originalPtr.Get(), std::placeholders::_2, a2, a3, a4, std::placeholders::_1), a1, a5);
 	}
 
 	STDMETHOD(get_Name)(HSTRING* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_Name(a1);
 	}
 
 	STDMETHOD(get_SocketKind)(int* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_SocketKind(a1);
 	}
 
 	STDMETHOD(get_InitiatorBoundPortRangeLower)(uint16_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_InitiatorBoundPortRangeLower(a1);
 	}
 
 	STDMETHOD(get_InitiatorBoundPortRangeUpper)(uint16_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_InitiatorBoundPortRangeUpper(a1);
 	}
 
 	STDMETHOD(get_AcceptorBoundPortRangeLower)(uint16_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_AcceptorBoundPortRangeLower(a1);
 	}
 
 	STDMETHOD(get_AcceptorBoundPortRangeUpper)(uint16_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_AcceptorBoundPortRangeUpper(a1);
 	}
 
 	STDMETHOD(get_EndpointPairs)(ABI::Windows::Foundation::Collections::IVectorView<IXboxLiveEndpointPair*>** a1) override
 	{
+		TraceFunction();
+
 		ComPtr<ABI::Windows::Foundation::Collections::IVectorView<IXboxLiveEndpointPair*>> rv;
 		HRESULT hr = m_originalPtr->get_EndpointPairs(rv.GetAddressOf());
 
@@ -631,6 +766,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IUnknown> ptr)
 	{
+		TraceFunction();
+
 		ptr.As(&m_originalPtr);
 		ptr.As(&m_originalFactory);
 
@@ -639,11 +776,15 @@ public:
 
 	virtual HRESULT ActivateInstance(_Outptr_result_nullonfailure_ IInspectable **ppvObject) override
 	{
+		TraceFunction();
+
 		return m_originalFactory->ActivateInstance(ppvObject);
 	}
 
 	STDMETHOD(GetTemplateByName)(HSTRING a1, IXboxLiveEndpointPairTemplate** a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveEndpointPairTemplate> tpl;
 		HRESULT hr = m_originalPtr->GetTemplateByName(a1, tpl.GetAddressOf());
 
@@ -660,6 +801,8 @@ public:
 
 	STDMETHOD(get_Templates)(ABI::Windows::Foundation::Collections::IVectorView<IXboxLiveEndpointPairTemplate*>** a1) override
 	{
+		TraceFunction();
+
 		ComPtr<ABI::Windows::Foundation::Collections::IVectorView<IXboxLiveEndpointPairTemplate*>> rv;
 		HRESULT hr = m_originalPtr->get_Templates(rv.GetAddressOf());
 
@@ -698,6 +841,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IUnknown> xboxLiveDevice)
 	{
+		TraceFunction();
+
 		xboxLiveDevice.As(&m_originalDevice);
 		xboxLiveDevice.As(&m_originalFactory);
 
@@ -706,11 +851,15 @@ public:
 
 	virtual HRESULT ActivateInstance(_Outptr_result_nullonfailure_ IInspectable **ppvObject) override
 	{
+		TraceFunction();
+
 		return m_originalFactory->ActivateInstance(ppvObject);
 	}
 
 	STDMETHOD(CreateFromSnapshotBase64)(HSTRING a1, IXboxLiveDeviceAddress** a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> address;
 		HRESULT hr = m_originalDevice->CreateFromSnapshotBase64(a1, address.GetAddressOf());
 
@@ -727,6 +876,8 @@ public:
 
 	STDMETHOD(CreateFromSnapshotBuffer)(ABI::Windows::Storage::Streams::IBuffer* a1, IXboxLiveDeviceAddress** a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> address;
 		HRESULT hr = m_originalDevice->CreateFromSnapshotBuffer(a1, address.GetAddressOf());
 
@@ -743,6 +894,8 @@ public:
 
 	STDMETHOD(CreateFromSnapshotBytes)(uint32_t a1, const BYTE* a2, IXboxLiveDeviceAddress** a3) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> address;
 		HRESULT hr = m_originalDevice->CreateFromSnapshotBytes(a1, a2, address.GetAddressOf());
 
@@ -759,6 +912,8 @@ public:
 
 	STDMETHOD(GetLocal)(IXboxLiveDeviceAddress** a1) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> address;
 		HRESULT hr = m_originalDevice->GetLocal(address.GetAddressOf());
 
@@ -775,6 +930,8 @@ public:
 
 	STDMETHOD(get_MaxSnapshotBytesSize)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalDevice->get_MaxSnapshotBytesSize(a1);
 	}
 };
@@ -784,11 +941,13 @@ class XboxLiveEndpointPairStatics : public ActivationFactory<>
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IUnknown> origPtr)
 	{
+		TraceFunction();
 		return S_OK;
 	}
 
 	virtual HRESULT ActivateInstance(IInspectable** instance) override
 	{
+		TraceFunction();
 		return E_FAIL;
 	}
 };
@@ -830,6 +989,8 @@ public:
 
 	virtual HRESULT STDMETHODCALLTYPE GetAt(unsigned index, TElement** item) override
 	{
+		TraceFunction();
+
 		ComPtr<TElement> itemPtr;
 		HRESULT hr = m_originalPtr->GetAt(index, itemPtr.GetAddressOf());
 
@@ -846,16 +1007,22 @@ public:
 
 	virtual /* propget */ HRESULT STDMETHODCALLTYPE get_Size(_Out_ unsigned *size) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_Size(size);
 	}
 
 	virtual HRESULT STDMETHODCALLTYPE GetView(_Outptr_result_maybenull_ IVectorView<TElement*> **view) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->GetView(view);
 	}
 
 	virtual HRESULT STDMETHODCALLTYPE IndexOf(_In_opt_ TElement* value, _Out_ unsigned *index, _Out_ boolean *found) override
 	{
+		TraceFunction();
+
 		ComPtr<TElement> element = value;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -870,6 +1037,8 @@ public:
 	// write methods
 	virtual HRESULT STDMETHODCALLTYPE SetAt(_In_ unsigned index, _In_opt_ TElement* item) override
 	{
+		TraceFunction();
+
 		ComPtr<TElement> element = item;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -883,6 +1052,8 @@ public:
 
 	virtual HRESULT STDMETHODCALLTYPE InsertAt(_In_ unsigned index, _In_opt_ TElement* item) override
 	{
+		TraceFunction();
+
 		ComPtr<TElement> element = item;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -896,11 +1067,15 @@ public:
 
 	virtual HRESULT STDMETHODCALLTYPE RemoveAt(_In_ unsigned index) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->RemoveAt(index);
 	}
 
 	virtual HRESULT STDMETHODCALLTYPE Append(_In_opt_ TElement* item) override
 	{
+		TraceFunction();
+
 		ComPtr<TElement> element = item;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -914,11 +1089,15 @@ public:
 
 	virtual HRESULT STDMETHODCALLTYPE RemoveAtEnd() override
 	{
+		TraceFunction();
+
 		return m_originalPtr->RemoveAtEnd();
 	}
 
 	virtual HRESULT STDMETHODCALLTYPE Clear() override
 	{
+		TraceFunction();
+
 		return m_originalPtr->Clear();
 	}
 };
@@ -931,6 +1110,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IUnknown> origPtr)
 	{
+		TraceFunction();
+
 		origPtr.As(&m_originalPtr);
 
 		return S_OK;
@@ -938,11 +1119,15 @@ public:
 
 	STDMETHOD(MeasureAsync)(IAsyncAction** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->MeasureAsync(a1);
 	}
 
 	STDMETHOD(GetMetricResultsForDevice)(IXboxLiveDeviceAddress* a1, ABI::Windows::Foundation::Collections::IVectorView<void*>** a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> device = a1;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -956,11 +1141,15 @@ public:
 
 	STDMETHOD(GetMetricResultsForMetric)(int a1, ABI::Windows::Foundation::Collections::IVectorView<void*>** a2) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->GetMetricResultsForMetric(a1, a2);
 	}
 
 	STDMETHOD(GetMetricResult)(IXboxLiveDeviceAddress* a1, int a2, void** a3) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> device = a1;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -974,6 +1163,8 @@ public:
 
 	STDMETHOD(GetPrivatePayloadResult)(IXboxLiveDeviceAddress* a1, void** a2) override
 	{
+		TraceFunction();
+
 		ComPtr<IXboxLiveDeviceAddress> device = a1;
 		ComPtr<IHasOriginalPtr> hasOriginal;
 
@@ -987,11 +1178,15 @@ public:
 
 	STDMETHOD(get_Metrics)(ABI::Windows::Foundation::Collections::IVector<int>** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_Metrics(a1);
 	}
 
 	STDMETHOD(get_DeviceAddresses)(ABI::Windows::Foundation::Collections::IVector<IXboxLiveDeviceAddress*>** a1) override
 	{
+		TraceFunction();
+
 		ComPtr<ABI::Windows::Foundation::Collections::IVector<IXboxLiveDeviceAddress*>> vector;
 		HRESULT hr = m_originalPtr->get_DeviceAddresses(vector.GetAddressOf());
 
@@ -1007,46 +1202,64 @@ public:
 
 	STDMETHOD(get_ShouldRequestPrivatePayloads)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_ShouldRequestPrivatePayloads(a1);
 	}
 
 	STDMETHOD(put_ShouldRequestPrivatePayloads)(boolean a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_ShouldRequestPrivatePayloads(a1);
 	}
 
 	STDMETHOD(get_TimeoutInMilliseconds)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_TimeoutInMilliseconds(a1);
 	}
 
 	STDMETHOD(put_TimeoutInMilliseconds)(uint32_t a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_TimeoutInMilliseconds(a1);
 	}
 
 	STDMETHOD(get_NumberOfProbesToAttempt)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_NumberOfProbesToAttempt(a1);
 	}
 
 	STDMETHOD(put_NumberOfProbesToAttempt)(uint32_t a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_NumberOfProbesToAttempt(a1);
 	}
 
 	STDMETHOD(get_NumberOfResultsPending)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_NumberOfResultsPending(a1);
 	}
 
 	STDMETHOD(get_MetricResults)(ABI::Windows::Foundation::Collections::IVectorView<void*>** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_MetricResults(a1);
 	}
 
 	STDMETHOD(get_PrivatePayloadResults)(ABI::Windows::Foundation::Collections::IVectorView<void*>** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_PrivatePayloadResults(a1);
 	}
 };
@@ -1076,6 +1289,8 @@ private:
 public:
 	HRESULT RuntimeClassInitialize(ComPtr<IUnknown> origPtr)
 	{
+		TraceFunction();
+
 		origPtr.As(&m_activationFactory);
 		origPtr.As(&m_originalPtr);
 
@@ -1084,6 +1299,8 @@ public:
 
 	virtual HRESULT ActivateInstance(IInspectable** instance) override
 	{
+		TraceFunction();
+
 		ComPtr<IInspectable> inst;
 		HRESULT hr = m_activationFactory->ActivateInstance(inst.GetAddressOf());
 
@@ -1100,56 +1317,78 @@ public:
 
 	STDMETHOD(PublishPrivatePayloadBytes)(uint32_t a1, const BYTE* a2) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->PublishPrivatePayloadBytes(a1, a2);
 	}
 
 	STDMETHOD(ClearPrivatePayload)() override
 	{
+		TraceFunction();
+
 		return m_originalPtr->ClearPrivatePayload();
 	}
 
 	STDMETHOD(get_MaxSimultaneousProbeConnections)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_MaxSimultaneousProbeConnections(a1);
 	}
 
 	STDMETHOD(put_MaxSimultaneousProbeConnections)(uint32_t a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_MaxSimultaneousProbeConnections(a1);
 	}
 
 	STDMETHOD(get_IsSystemOutboundBandwidthConstrained)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_IsSystemOutboundBandwidthConstrained(a1);
 	}
 
 	STDMETHOD(put_IsSystemOutboundBandwidthConstrained)(boolean a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_IsSystemOutboundBandwidthConstrained(a1);
 	}
 
 	STDMETHOD(get_IsSystemInboundBandwidthConstrained)(boolean* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_IsSystemInboundBandwidthConstrained(a1);
 	}
 
 	STDMETHOD(put_IsSystemInboundBandwidthConstrained)(boolean a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_IsSystemInboundBandwidthConstrained(a1);
 	}
 
 	STDMETHOD(get_PublishedPrivatePayload)(ABI::Windows::Storage::Streams::IBuffer** a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_PublishedPrivatePayload(a1);
 	}
 
 	STDMETHOD(put_PublishedPrivatePayload)(ABI::Windows::Storage::Streams::IBuffer* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->put_PublishedPrivatePayload(a1);
 	}
 
 	STDMETHOD(get_MaxPrivatePayloadSize)(uint32_t* a1) override
 	{
+		TraceFunction();
+
 		return m_originalPtr->get_MaxPrivatePayloadSize(a1);
 	}
 };
@@ -1158,6 +1397,8 @@ HRESULT STDMETHODCALLTYPE XboxLiveEndpointPair::get_Template(IXboxLiveEndpointPa
 {
 	ComPtr<IXboxLiveEndpointPairTemplate> ptr;
 	HRESULT hr = m_originalPtr->get_Template(ptr.GetAddressOf());
+
+	TraceFunction();
 
 	if (SUCCEEDED(hr))
 	{
@@ -1175,6 +1416,8 @@ HRESULT STDMETHODCALLTYPE XboxLiveEndpointPair::get_RemoteDeviceAddress(IXboxLiv
 	ComPtr<IXboxLiveDeviceAddress> ptr;
 	HRESULT hr = m_originalPtr->get_RemoteDeviceAddress(ptr.GetAddressOf());
 
+	TraceFunction();
+
 	if (SUCCEEDED(hr))
 	{
 		ComPtr<XboxLiveDeviceAddress> result;
@@ -1190,6 +1433,8 @@ HRESULT STDMETHODCALLTYPE XboxLiveEndpointPairCreationResult::get_EndpointPair(I
 {
 	ComPtr<IXboxLiveEndpointPair> ptr;
 	HRESULT hr = m_originalPtr->get_EndpointPair(ptr.GetAddressOf());
+
+	TraceFunction();
 
 	if (SUCCEEDED(hr))
 	{
@@ -1207,6 +1452,8 @@ HRESULT STDMETHODCALLTYPE XboxLiveEndpointPairCreationResult::get_DeviceAddress(
 	ComPtr<IXboxLiveDeviceAddress> ptr;
 	HRESULT hr = m_originalPtr->get_DeviceAddress(ptr.GetAddressOf());
 
+	TraceFunction();
+
 	if (SUCCEEDED(hr))
 	{
 		ComPtr<XboxLiveDeviceAddress> result;
@@ -1221,6 +1468,8 @@ HRESULT STDMETHODCALLTYPE XboxLiveEndpointPairCreationResult::get_DeviceAddress(
 template<typename T>
 HRESULT MakeFactory(IUnknown* factory, IActivationFactory** outFactory)
 {
+	TraceFunction();
+
 	ComPtr<IUnknown> unknown(factory);
 
 	return MakeAndInitialize<T>(outFactory, unknown);
@@ -1228,6 +1477,9 @@ HRESULT MakeFactory(IUnknown* factory, IActivationFactory** outFactory)
 
 void MakeXBLActivationProxies()
 {
+	TraceFunction();
+	TraceIfFailed(E_NOINTERFACE);
+
 	ImHost_AddActivationProxy(L"Windows.Networking.XboxLive.XboxLiveDeviceAddress", MakeFactory<XboxLiveDeviceAddressStatics>);
 	ImHost_AddActivationProxy(L"Windows.Networking.XboxLive.XboxLiveEndpointPair", MakeFactory<XboxLiveEndpointPairStatics>);
 	ImHost_AddActivationProxy(L"Windows.Networking.XboxLive.XboxLiveEndpointPairTemplate", MakeFactory<XboxLiveEndpointPairTemplateStatics>);
