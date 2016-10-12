@@ -5,6 +5,9 @@
 #include <roapi.h>
 #include <roregistrationapi.h>
 
+#include <strsafe.h>
+#include <libloaderapi.h>
+
 #pragma comment(lib, "runtimeobject.lib")
 
 static std::wstring g_appDataPath = L"B:\\tools\\bigstate";
@@ -103,8 +106,24 @@ int main(int argc, char** argv)
 	InitializeUserStubs();
 	InitializeMurderScene();
 
+	// set the package root as DLL root
 	SetDllDirectory(identity->GetApplicationRoot().c_str());
 
+	// for if the executable is not in the same path as the package root
+	std::wstring exeBase = identity->GetApplicationFileName().c_str();
+	exeBase = exeBase.substr(0, exeBase.find_last_of(L'\\'));
+
+	auto appendToPath = [] (const std::wstring& path)
+	{
+		wchar_t pathBuffer[32768];
+		GetEnvironmentVariable(L"PATH", pathBuffer, _countof(pathBuffer));
+
+		SetEnvironmentVariable(L"PATH", (path + L";" + pathBuffer).c_str());
+	};
+
+	appendToPath(identity->GetApplicationRoot() + L"\\" + exeBase);
+
+	// run activation proxy components if needed
 	if (ActivationClient_Intercept(argc, argv))
 	{
 		return 0;
