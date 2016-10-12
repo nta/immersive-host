@@ -83,7 +83,7 @@ LONG WINAPI MurderSceneVEH(PEXCEPTION_POINTERS ptrs)
 		if (found)
 		{
 			// stub out this threadpool task
-			if (((uintptr_t)ptrs->ExceptionRecord->ExceptionAddress >> 36) == 0x7FF)
+			//if (((uintptr_t)ptrs->ExceptionRecord->ExceptionAddress >> 36) == 0x7FF)
 			{
 				ptrs->ContextRecord->Rip = (DWORD64)RaiseTrailBlazer;
 				ptrs->ContextRecord->Rsp &= 0xFFFFFFFFFFFFFFF0;
