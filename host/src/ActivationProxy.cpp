@@ -549,9 +549,13 @@ HRESULT RunActivationServer(const char* pipeHandleStr, const char* parentHandleS
 
 #include <string>
 
+DWORD g_parentPid;
+
 HRESULT RunActivationServer(HANDLE hPipe, HANDLE hParent)
 {
 	RoInitialize(RO_INIT_SINGLETHREADED);
+
+	g_parentPid = GetProcessId(hParent);
 
 	HRESULT hr;
 
@@ -602,6 +606,11 @@ HRESULT RunActivationServer(HANDLE hPipe, HANDLE hParent)
 	}
 
 	return hr;
+}
+
+DWORD ImHost_GetParentProcessId()
+{
+	return g_parentPid;
 }
 
 void PrepareActivation()

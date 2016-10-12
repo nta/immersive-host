@@ -12,6 +12,7 @@ HRESULT ImHost_GetAppScopedActivationFactory(HSTRING activatableClassId, REFIID 
 bool ImHost_IsActivationProxy();
 HANDLE ImHost_GetActivationProxyProcessHandle();
 HWND ImHost_GetCoreWindowHandle();
+DWORD ImHost_GetParentProcessId();
 
 #define DEFINE_MODULE_CHECK(key, name) \
 	struct key##Module { static inline const wchar_t* GetName() { return L##name; }	};
