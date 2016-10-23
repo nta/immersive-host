@@ -53,7 +53,7 @@ project 'immersivehost'
         'host/**.idl'
     }
 
-    links { 'minhook', 'udis86', 'pugixml' }
+    links { 'minhook', 'udis86', 'pugixml', 'elevationservice' }
 
     pchsource 'host/src/StdInc.cpp'
     pchheader 'StdInc.h'
