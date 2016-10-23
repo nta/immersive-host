@@ -2,7 +2,8 @@ workspace 'immersive'
     configurations { 'Debug', 'Release' }
     platforms { 'Win32', 'Win64' }
 
-    flags { 'Symbols', 'Unicode' }
+    symbols "On"
+    characterset "Unicode"
 
     includedirs { 'common/include/' }
 
@@ -33,7 +34,7 @@ project 'immersivehost'
     targetname 'ImmersiveHost'
     language 'C++'
     kind 'ConsoleApp'
-    windowstarget '10.0.14393.0'
+    systemversion '10.0.14393.0'
     linkoptions '/stack:5000000,131072' -- for software such as Microsoft.SpartaUWP
 
     includedirs
@@ -52,7 +53,7 @@ project 'immersivehost'
         'host/**.idl'
     }
 
-    links { 'minhook', 'udis86', 'pugixml' }
+    links { 'minhook', 'udis86', 'pugixml', 'elevationservice' }
 
     pchsource 'host/src/StdInc.cpp'
     pchheader 'StdInc.h'
