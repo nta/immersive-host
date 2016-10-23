@@ -9,7 +9,16 @@ workspace 'immersive'
 
     location 'build/'
 
-    defines { 'PUGIXML_WCHAR_MODE' }
+    defines { 
+        "_CRT_SECURE_NO_WARNINGS",
+        "_CRT_SECURE_NO_DEPRECATE",
+        "_CRT_NONSTDC_NO_WARNINGS",
+        "_CRT_NONSTDC_NO_DEPRECATE",
+        "_SCL_SECURE_NO_WARNINGS",
+        "_SCL_SECURE_NO_DEPRECATE",
+        "_WINSOCK_DEPRECATED_NO_WARNINGS",
+        "PUGIXML_WCHAR_MODE"
+    }
 
     filter 'platforms:Win32'
         architecture 'x32'
