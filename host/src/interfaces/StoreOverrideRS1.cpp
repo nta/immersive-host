@@ -1,84 +1,15 @@
 #include "StdInc.h"
 #include <Windows.Services.Store.h>
+#include <StubInternal.h>
+
+#include <experimental/filesystem>
 
 #include <Map.h>
+#include <ShlObj.h>
 
 using namespace ABI::Windows::Foundation;
 using namespace ABI::Windows::Services::Store;
 using namespace ABI::Windows::System;
-
-template<typename T>
-struct TypeStubs
-{
-	using StorageType = ComPtr<std::remove_pointer_t<T>>;
-
-	static inline void Copy(ComPtr<std::remove_pointer_t<T>> result, T* out)
-	{
-		result.CopyTo(out);
-	}
-};
-
-template<>
-struct TypeStubs<HSTRING>
-{
-	using StorageType = HString;
-
-	static inline void Copy(HString result, HSTRING* out)
-	{
-		result.CopyTo(out);
-	}
-};
-
-template<>
-struct TypeStubs<int>
-{
-	using StorageType = int;
-
-	static inline void Copy(int result, int* out)
-	{
-		*out = result;
-	}
-};
-
-template<typename T, typename TIface = T>
-class AsyncOperationStub : public RuntimeClass<AsyncBase<IAsyncOperationCompletedHandler<T>>, IAsyncOperation<T>>
-{
-private:
-	typename TypeStubs<TIface>::StorageType m_result;
-
-public:
-	AsyncOperationStub(typename TypeStubs<TIface>::StorageType result)
-	{
-		m_result = result;
-
-		Start();
-
-		FireCompletion();
-	}
-
-	virtual auto STDMETHODCALLTYPE put_Completed(IAsyncOperationCompletedHandler<T>* handler) -> HRESULT override
-	{
-		return this->PutOnComplete(handler);
-	}
-
-	virtual auto STDMETHODCALLTYPE get_Completed(IAsyncOperationCompletedHandler<T>** handler) -> HRESULT override
-	{
-		return this->GetOnComplete(handler);
-	}
-
-	virtual auto STDMETHODCALLTYPE GetResults(TIface* results)  -> HRESULT override
-	{
-		TypeStubs<TIface>::Copy(m_result, results);
-
-		return S_OK;
-	}
-
-protected:
-
-	virtual auto OnStart()  -> HRESULT override { return S_OK; }
-	virtual auto OnClose()  -> void    override {};
-	virtual auto OnCancel() -> void    override {};
-};
 
 namespace ABI
 {
@@ -90,7 +21,7 @@ namespace ABI
 			{
 				template <>
 				struct __declspec(uuid("7d0d74f5-4020-54aa-9f3d-0f17127abeef"))
-					IMap<HSTRING, ABI::Windows::Services::Store::StoreProduct*> : IMapView_impl<HSTRING, ABI::Windows::Foundation::Internal::AggregateType<ABI::Windows::Services::Store::StoreProduct*, ABI::Windows::Services::Store::IStoreProduct*>>
+					IMap<HSTRING, ABI::Windows::Services::Store::StoreProduct*> : IMap_impl<HSTRING, ABI::Windows::Foundation::Internal::AggregateType<ABI::Windows::Services::Store::StoreProduct*, ABI::Windows::Services::Store::IStoreProduct*>>
 				{
 					static const wchar_t* z_get_rc_name_impl()
 					{
@@ -101,7 +32,7 @@ namespace ABI
 
 				template <>
 				struct __declspec(uuid("7d0d74f5-4020-54aa-9f3d-0f17127abeed"))
-					IVector<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*> : IVector_impl<IKeyValuePair_impl<HSTRING, ABI::Windows::Foundation::Internal::AggregateType<ABI::Windows::Services::Store::StoreProduct*, ABI::Windows::Services::Store::IStoreProduct*>>*>
+					IVector<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*> : IVector_impl<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*>
 				{
 					static const wchar_t* z_get_rc_name_impl()
 					{
@@ -111,7 +42,7 @@ namespace ABI
 
 				template <>
 				struct __declspec(uuid("7d0d74f5-4020-54aa-9f3d-0f17127abeee"))
-					IVectorView<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*> : IVectorView_impl<IKeyValuePair_impl<HSTRING, ABI::Windows::Foundation::Internal::AggregateType<ABI::Windows::Services::Store::StoreProduct*, ABI::Windows::Services::Store::IStoreProduct*>>*>
+					IVectorView<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*> : IVectorView_impl<IKeyValuePair<HSTRING, ABI::Windows::Services::Store::StoreProduct*>*>
 				{
 					static const wchar_t* z_get_rc_name_impl()
 					{
@@ -124,28 +55,219 @@ namespace ABI
 	} /* Collections */
 }
 
-template<typename T, typename TAbi = T>
-class EmptyIterator : public RuntimeClass<ABI::Windows::Foundation::Collections::IIterator<T>>
+#include <json.hpp>
+#include <fstream>
+#include <sstream>
+#include <codecvt>
+
+using json = nlohmann::json;
+namespace fs = std::experimental::filesystem;
+
+static std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> g_converter;
+
+std::wstring ToWide(const std::string& narrow)
+{
+	return g_converter.from_bytes(narrow);
+}
+
+HRESULT ToHString(const json& jsonField, HSTRING* out)
+{
+	std::wstring wstr = ToWide(jsonField.get<std::string>());
+	return WindowsCreateString(wstr.c_str(), wstr.size(), out);
+}
+
+class CustomStoreProduct : public RuntimeClass<IStoreProduct>
+{
+private:
+	json m_data;
+
+public:
+	CustomStoreProduct(const fs::path& filePath)
+	{
+		std::ifstream productFile(filePath.c_str());
+		m_data = json::parse(productFile);
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_StoreId(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["StoreId"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Language(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["Language"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Title(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["Title"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Description(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["Description"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_ProductKind(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["ProductKind"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_HasDigitalDownload(
+		/* [out][retval] */ __RPC__out boolean *value) override
+	{
+		*value = m_data["HasDigitalDownload"].get<bool>();
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Keywords(
+		/* [out][retval] */ __RPC__deref_out_opt __FIVectorView_1_HSTRING **value) override
+	{
+		auto view = Make<EmptyVectorView<HSTRING>>();
+		return view.CopyTo(value);
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Images(
+		/* [out][retval] */ __RPC__deref_out_opt __FIVectorView_1_Windows__CServices__CStore__CStoreImage **value) override
+	{
+		auto view = Make<EmptyVectorView<StoreImage*, IStoreImage*>>();
+		return view.CopyTo(value);
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Videos(
+		/* [out][retval] */ __RPC__deref_out_opt __FIVectorView_1_Windows__CServices__CStore__CStoreVideo **value) override
+	{
+		auto view = Make<EmptyVectorView<StoreVideo*, IStoreVideo*>>();
+		return view.CopyTo(value);
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Skus(
+		/* [out][retval] */ __RPC__deref_out_opt __FIVectorView_1_Windows__CServices__CStore__CStoreSku **value) override
+	{
+		auto view = Make<EmptyVectorView<StoreSku*, IStoreSku*>>();
+		return view.CopyTo(value);
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_IsInUserCollection(
+		/* [out][retval] */ __RPC__out boolean *value) override
+	{
+		*value = true;
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Price(
+		/* [out][retval] */ __RPC__deref_out_opt ABI::Windows::Services::Store::IStorePrice **value) override
+	{
+		return E_NOTIMPL;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_ExtendedJsonData(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["ExtendedJsonData"], value);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_LinkUri(
+		/* [out][retval] */ __RPC__deref_out_opt ABI::Windows::Foundation::IUriRuntimeClass **value) override
+	{
+		return E_NOTIMPL;
+	}
+
+	virtual HRESULT STDMETHODCALLTYPE GetIsAnySkuInstalledAsync(
+		/* [out][retval] */ __RPC__deref_out_opt __FIAsyncOperation_1_boolean **operation) override
+	{
+		*operation = (std::remove_pointer_t<decltype(operation)>)(0xCEFED);
+		return S_OK;
+	}
+
+	virtual HRESULT STDMETHODCALLTYPE RequestPurchaseAsync(
+		/* [out][retval] */ __RPC__deref_out_opt __FIAsyncOperation_1_Windows__CServices__CStore__CStorePurchaseResult **operation) override
+	{
+		*operation = (std::remove_pointer_t<decltype(operation)>)(0xCEDEF);
+		return S_OK;
+	}
+
+	virtual HRESULT STDMETHODCALLTYPE RequestPurchaseWithPurchasePropertiesAsync(
+		/* [in] */ __RPC__in_opt ABI::Windows::Services::Store::IStorePurchaseProperties *storePurchaseProperties,
+		/* [out][retval] */ __RPC__deref_out_opt __FIAsyncOperation_1_Windows__CServices__CStore__CStorePurchaseResult **operation) override
+	{
+		*operation = (std::remove_pointer_t<decltype(operation)>)(0xCADEFADE);
+		return S_OK;
+	}
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_InAppOfferToken(
+		/* [out][retval] */ __RPC__deref_out_opt HSTRING *value) override
+	{
+		ToHString(m_data["InAppOfferToken"], value);
+		return S_OK;
+	}
+};
+
+#include <PackageIdentity.h>
+
+class CustomProductQueryResult : public RuntimeClass<IStoreProductQueryResult>
 {
 public:
-	virtual /* propget */ HRESULT STDMETHODCALLTYPE get_Current(_Out_ TAbi *current) override
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_Products(
+		/* [out][retval] */ __RPC__deref_out_opt __FIMapView_2_HSTRING_Windows__CServices__CStore__CStoreProduct **value)
 	{
-		*current = nullptr;
-		return S_OK;
+		auto productMap = Make<collections::Map<HSTRING, StoreProduct*>>();
+
+		PWSTR appDataPath;
+		if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_SavedGames, 0, nullptr, &appDataPath)))
+		{
+			// create the directory if not existent
+			std::wstring dataPath = std::wstring(appDataPath) + L"\\ImmersiveHost";
+			CreateDirectory(dataPath.c_str(), nullptr);
+
+			dataPath += L"\\";
+			dataPath += GetCurrentPackageIdentity()->GetFamilyName();
+
+			CreateDirectory(dataPath.c_str(), nullptr);
+
+			try
+			{
+				// look for entries
+				for (auto& dir : fs::directory_iterator(dataPath + L"\\iap"))
+				{
+					if (dir.path().extension() == ".json")
+					{
+						auto product = Make<CustomStoreProduct>(dir.path());
+
+						HString storeIdStr;
+						product->get_StoreId(storeIdStr.GetAddressOf());
+
+						boolean replaced;
+						productMap->Insert(storeIdStr.Get(), product.Get(), &replaced);
+					}
+				}
+			}
+			catch (std::exception)
+			{
+
+			}
+
+			CoTaskMemFree(appDataPath);
+		}
+
+		return productMap->GetView(value);
 	}
-	virtual /* propget */ HRESULT STDMETHODCALLTYPE get_HasCurrent(_Out_ boolean *hasCurrent) override
+
+	virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_ExtendedError(
+		/* [out][retval] */ __RPC__out HRESULT *value)
 	{
-		*hasCurrent = false;
-		return S_OK;
-	}
-	virtual HRESULT STDMETHODCALLTYPE MoveNext(_Out_ boolean *hasCurrent) override
-	{
-		*hasCurrent = false;
-		return S_FALSE;
-	}
-	virtual HRESULT STDMETHODCALLTYPE GetMany(_In_ unsigned capacity, _Out_writes_to_(capacity, *actual) TAbi *value, _Out_ unsigned *actual) override
-	{
-		*actual = 0;
+		*value = S_OK;
 		return S_OK;
 	}
 };
@@ -187,41 +309,6 @@ public:
 	{
 		auto it = Make<EmptyIterator<ABI::Windows::Foundation::Collections::IKeyValuePair<HSTRING, StoreProduct*>*>>();
 		
-		return it.CopyTo(first);
-	}
-};
-
-template<typename T, typename TIface = T>
-class EmptyVectorView : public RuntimeClass<ABI::Windows::Foundation::Collections::IVectorView<T>, ABI::Windows::Foundation::Collections::IIterable<T>>
-{
-public:
-	virtual HRESULT STDMETHODCALLTYPE GetAt(_In_ unsigned index, _Out_ TIface *item) override
-	{
-		return S_OK;
-	}
-
-	virtual /* propget */ HRESULT STDMETHODCALLTYPE get_Size(_Out_ unsigned *size) override
-	{
-		*size = 0;
-		return S_OK;
-	}
-
-	virtual HRESULT STDMETHODCALLTYPE IndexOf(_In_opt_ TIface value, _Out_ unsigned *index, _Out_ boolean *found) override
-	{
-		*found = false;
-		return S_OK;
-	}
-
-	virtual HRESULT STDMETHODCALLTYPE GetMany(_In_  unsigned startIndex, _In_ unsigned capacity, _Out_writes_to_(capacity, *actual) TIface *value, _Out_ unsigned *actual) override
-	{
-		*actual = false;
-		return S_OK;
-	}
-
-	virtual HRESULT STDMETHODCALLTYPE First(ABI::Windows::Foundation::Collections::IIterator<T>** first) override
-	{
-		auto it = Make<EmptyIterator<T, TIface>>();
-
 		return it.CopyTo(first);
 	}
 };
@@ -401,7 +488,7 @@ public:
 		__FIIterable_1_HSTRING *productKinds,
 		__FIAsyncOperation_1_Windows__CServices__CStore__CStoreProductQueryResult **operation)
 	{
-		auto productsStub = Make<ProductQueryResultStub>();
+		auto productsStub = Make<CustomProductQueryResult>();
 
 		ComPtr<IStoreProductQueryResult> ptr;
 		productsStub.As(&ptr);
