@@ -8,6 +8,8 @@ workspace 'immersive'
 
     location 'build/'
 
+    defines { 'PUGIXML_WCHAR_MODE' }
+
     filter 'platforms:Win32'
         architecture 'x32'
 
