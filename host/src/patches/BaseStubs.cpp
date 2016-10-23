@@ -14,7 +14,7 @@
 
 static DWORD(WINAPI* g_origGetModuleFileNameW)(HMODULE hModule, LPWSTR lpFilename, DWORD nSize);
 static ULONG(WINAPI* g_origNtStatusToDosError)(NTSTATUS);
-static LONG(NTAPI* g_origWaitOnAddress)(void* address, void* wait, size_t size);
+static LONG(NTAPI* g_origWaitOnAddress)(void* address, void* wait, size_t size, PLARGE_INTEGER time);
 static VOID(NTAPI* g_origWakeAddressAll)(void* address);
 static BOOL(WINAPI* g_origGetTokenInformation)(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
 static NTSTATUS(WINAPI* g_origNtQueryInformationToken)(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, PVOID TokenInformation, ULONG TokenInformationLength, PULONG ReturnLength);
@@ -108,7 +108,7 @@ BOOL WINAPI CapabilityCheck_Custom(HANDLE hUnknown, PCWSTR capabilityName, BOOL*
 	return TRUE;
 }
 
-LONG NTAPI RtlWaitOnAddress_Custom(void* address, void* wait, size_t size)
+LONG NTAPI RtlWaitOnAddress_Custom(void* address, void* wait, size_t size, PLARGE_INTEGER time)
 {
 	if (IsModule<TWinAPIModule>(_ReturnAddress()))
 	{
@@ -117,7 +117,7 @@ LONG NTAPI RtlWaitOnAddress_Custom(void* address, void* wait, size_t size)
 		return 0;
 	}
 
-	return g_origWaitOnAddress(address, wait, size);
+	return g_origWaitOnAddress(address, wait, size, time);
 }
 
 DWORD g_activationUnlock;
@@ -134,7 +134,7 @@ VOID NTAPI RtlWakeAddressAll_Custom(PVOID address)
 			g_origWakeAddressAll(&g_activationUnlock);
 
 			DWORD oldLock = g_activationLock;
-			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock));
+			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock), nullptr);
 		}
 	}
 
@@ -250,7 +250,7 @@ PVOID WINAPI ResolveDelayLoadedAPI_Custom(PVOID ParentModuleBase, PCIMAGE_DELAYL
 		if (g_activationLock < 1)
 		{
 			DWORD oldLock = g_activationLock;
-			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock));
+			g_origWaitOnAddress(&g_activationLock, &oldLock, sizeof(g_activationLock), nullptr);
 		}
 
 		retval = LocalDelayLoadHelper2(ParentModuleBase, (PCImgDelayDescr)DelayloadDescriptor, (FARPROC*)ThunkAddress);
