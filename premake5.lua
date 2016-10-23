@@ -2,7 +2,8 @@ workspace 'immersive'
     configurations { 'Debug', 'Release' }
     platforms { 'Win32', 'Win64' }
 
-    flags { 'Symbols', 'Unicode' }
+    symbols "On"
+    characterset "Unicode"
 
     includedirs { 'common/include/' }
 
