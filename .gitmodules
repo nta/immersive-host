@@ -1,0 +1,9 @@
+[submodule "vendor/minhook"]
+	path = vendor/minhook
+	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "vendor/pugixml"]
+	path = vendor/pugixml
+	url = https://github.com/zeux/pugixml.git
+[submodule "vendor/udis86"]
+	path = vendor/udis86
+	url = https://github.com/vmt/udis86
