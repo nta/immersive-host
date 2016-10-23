@@ -221,5 +221,6 @@ void RegisterActivationOverrides()
 		ImHost_AddActivationFactory(L"Windows.Networking.XboxLive.XboxLiveEndpointPair", AutoActivation);
 		ImHost_AddActivationFactory(L"Windows.Networking.XboxLive.XboxLiveEndpointPairTemplate", AutoActivation);
 		ImHost_AddActivationFactory(L"Windows.Networking.XboxLive.XboxLiveQualityOfServiceMeasurement", AutoActivation);
+		ImHost_AddActivationFactory(L"Windows.System.Profile.HardwareIdentification", AutoActivation);
 	});
 }
