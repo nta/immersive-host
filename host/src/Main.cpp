@@ -18,6 +18,7 @@ void PrepareActivation();
 void RegisterStoreOverride();
 void RegisterStoreOverrideRS1();
 void RegisterExtendedExecution();
+void RegisterDeviceEnumeration();
 
 void InitializeWindowInterfaces();
 void InitializeBaseStubs();
@@ -87,6 +88,7 @@ int main(int argc, char** argv)
 	}
 
 	RegisterExtendedExecution();
+	RegisterDeviceEnumeration();
 
 	LoadLibrary(L"tlsdll.dll");
 
