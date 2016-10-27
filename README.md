@@ -1,5 +1,7 @@
 # ImmersiveHost
 
+[![AppVeyor master branch Build Status](https://img.shields.io/appveyor/ci/ntauthority/immersive-host/master.svg)](https://ci.appveyor.com/project/ntauthority/immersive-host)
+
 *(pending update)*
 
 ImmersiveHost is an attempt to host Immersive mode applications ("Windows Store applications", "Metro applications", "Modern UI applications", "UWP applications", etc.) in a more open context outside of the usual app container/package situations.
