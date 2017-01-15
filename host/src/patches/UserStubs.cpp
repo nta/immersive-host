@@ -148,33 +148,6 @@ void DuplicateNetworkFirewallRule()
 
 int InitAfterDec()
 {
-	// temp fix for opus
-	char* mB = (char*)GetModuleHandle(nullptr);
-
-	auto pattern = hook::module_pattern(mB, "74 08 49 8B CF E8 ? ? ? ? 44 89");
-
-	if (pattern.size() > 0)
-	{
-		char* location = pattern.get(0).get<char>(6);
-		char* address = (location + *(int32_t*)location + 4);
-
-		DWORD a;
-		VirtualProtect(address, 1, PAGE_EXECUTE_READWRITE, &a);
-		*address = 0xC3;
-	}
-
-	// opus #2: net log api
-	pattern = hook::module_pattern(mB, "48 89 74 24 ? 48 8D 54 24 ? 4C 8B CB");
-
-	for (int i = 0; i < pattern.size(); i++)
-	{
-		char* address = pattern.get(i).get<char>(-0x27);
-
-		MH_CreateHook(address, WriteNetworkLog, nullptr);
-	}
-
-	MH_EnableHook(MH_ALL_HOOKS);
-
 	return 0;
 }
 
